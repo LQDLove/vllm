@@ -92,11 +92,19 @@ HANDSHAKE_TIMEOUT_MINS = 5
 
 _R = TypeVar("_R")  # Return type for collective_rpc
 
+# EngineCore 是 vLLM V1 引擎的核心循环层。它不直接处理 HTTP/API，而是负责：
+# 初始化 model_executor
+# 初始化 KV cache
+# 初始化 scheduler
+# 接收 Request
+# 每轮 step() 调度请求并执行模型
+# 把模型输出交回 scheduler 更新状态
+# 管理 cache reset、sleep/wake、LoRA、pause/resume 等运行态能力
 
-class EngineCore:
+class EngineCore:           # 定义V1 engine的内部核心类
     """Inner loop of vLLM's Engine."""
 
-    def __init__(
+    def __init__(               # 构造EngineCore，输入配置、Executor类型、统计开关、失败回调等
         self,
         vllm_config: VllmConfig,
         executor_class: type[Executor],
@@ -107,30 +115,30 @@ class EngineCore:
         # plugins need to be loaded at the engine/scheduler level too
         from vllm.plugins import load_general_plugins
 
-        load_general_plugins()
+        load_general_plugins()      # 在engine/scheduler层加载插件，保证调度器也能看到插件能力。
 
-        self.vllm_config = vllm_config
-        if not vllm_config.parallel_config.data_parallel_rank_local:
+        self.vllm_config = vllm_config      # 保存全局vLLM配置。
+        if not vllm_config.parallel_config.data_parallel_rank_local:        # 只有本地DP rank 0打初始化日志，避免多进程重复刷屏。
             logger.info(
                 "Initializing a V1 LLM engine (v%s) with config: %s",
                 VLLM_VERSION,
                 vllm_config,
             )
 
-        self.log_stats = log_stats
+        self.log_stats = log_stats          # 保存是否记录调度/执行统计。
 
         # Setup Model.
-        self.model_executor = executor_class(vllm_config)
-        if executor_fail_callback is not None:
+        self.model_executor = executor_class(vllm_config)       # 创建模型执行器，后续模型forward、采样、KV cache初始化都通过它完成。          
+        if executor_fail_callback is not None:                  # 如果传了失败回调，就注册到executor，worker异常时可通知 EngineCore。
             self.model_executor.register_failure_callback(executor_fail_callback)
 
-        self.available_gpu_memory_for_kv_cache = -1
+        self.available_gpu_memory_for_kv_cache = -1             # 初始化可用于KV cache的GPU内存记录。
 
-        if envs.VLLM_ELASTIC_EP_SCALE_UP_LAUNCH:
+        if envs.VLLM_ELASTIC_EP_SCALE_UP_LAUNCH:                # 弹性专家并行扩容场景下，KV初始化前先做scale-up准备。
             self._eep_scale_up_before_kv_init()
 
         # Setup KV Caches and update CacheConfig after profiling.
-        kv_cache_config = self._initialize_kv_caches(vllm_config)
+        kv_cache_config = self._initialize_kv_caches(vllm_config)   # 做内存profiling、KV cache 配置生成、worker KV cache初始化和warmup。
         self.structured_output_manager = StructuredOutputManager(vllm_config)
 
         # Setup scheduler.
