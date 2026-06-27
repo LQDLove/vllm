@@ -139,23 +139,23 @@ class EngineCore:           # 定义V1 engine的内部核心类
 
         # Setup KV Caches and update CacheConfig after profiling.
         kv_cache_config = self._initialize_kv_caches(vllm_config)   # 做内存profiling、KV cache 配置生成、worker KV cache初始化和warmup。
-        self.structured_output_manager = StructuredOutputManager(vllm_config)
+        self.structured_output_manager = StructuredOutputManager(vllm_config)   # 初始化结构化输出管理器，用于 guided decoding / grammar 约束等。
 
         # Setup scheduler.
-        Scheduler = vllm_config.scheduler_config.get_scheduler_cls()
+        Scheduler = vllm_config.scheduler_config.get_scheduler_cls()    # 根据配置拿调度器类，默认是 V1 Scheduler，异步调度时可能是 AsyncScheduler。
 
-        if len(kv_cache_config.kv_cache_groups) == 0:  # noqa: SIM102
+        if len(kv_cache_config.kv_cache_groups) == 0:  # noqa: SIM102           # 如果模型没有 KV cache，例如部分 encoder/pooling 模型，特殊处理。
             # Encoder models without KV cache don't support
             # chunked prefill. But do SSM models?
-            if vllm_config.scheduler_config.enable_chunked_prefill:
+            if vllm_config.scheduler_config.enable_chunked_prefill:         # 没有 KV cache 的模型不支持 chunked prefill，因此关闭并打印 warning。
                 logger.warning("Disabling chunked prefill for model without KVCache")
                 vllm_config.scheduler_config.enable_chunked_prefill = False
 
-        scheduler_block_size, hash_block_size = resolve_kv_cache_block_sizes(
+        scheduler_block_size, hash_block_size = resolve_kv_cache_block_sizes(       # 解析 scheduler block size 和 hash block size，供调度器和 prefix cache 使用。
             kv_cache_config, vllm_config
         )
 
-        self.scheduler: SchedulerInterface = Scheduler(
+        self.scheduler: SchedulerInterface = Scheduler(             # 创建调度器，传入全局配置、KV cache 配置、结构化输出管理器、block size 等。
             vllm_config=vllm_config,
             kv_cache_config=kv_cache_config,
             structured_output_manager=self.structured_output_manager,
@@ -164,23 +164,23 @@ class EngineCore:           # 定义V1 engine的内部核心类
             block_size=scheduler_block_size,
             hash_block_size=hash_block_size,
         )
-        self.use_spec_decode = vllm_config.speculative_config is not None
-        self.check_for_draft_tokens = (
+        self.use_spec_decode = vllm_config.speculative_config is not None           # 判断是否启用 speculative decoding。
+        self.check_for_draft_tokens = (                                 # 判断是否需要检查 draft tokens，spec decode 或 diffusion 模型需要。
             self.use_spec_decode or vllm_config.model_config.is_diffusion
         )
-        if self.scheduler.connector is not None:  # type: ignore
+        if self.scheduler.connector is not None:  # type: ignore            # 如果调度器配置了 KV connector，则让 model executor 初始化 KV 输出聚合器。
             self.model_executor.init_kv_output_aggregator(self.scheduler.connector)  # type: ignore
 
-        mm_registry = MULTIMODAL_REGISTRY
-        self.mm_receiver_cache = mm_registry.engine_receiver_cache_from_config(
+        mm_registry = MULTIMODAL_REGISTRY                                       # 取多模态注册表。
+        self.mm_receiver_cache = mm_registry.engine_receiver_cache_from_config( # 为 EngineCore 初始化多模态 receiver cache。
             vllm_config
         )
 
         # If a KV connector is initialized for scheduler, we want to collect
         # handshake metadata from all workers so the connector in the scheduler
         # will have the full context
-        kv_connector = self.scheduler.get_kv_connector()
-        if kv_connector is not None:
+        kv_connector = self.scheduler.get_kv_connector()                    # 从 scheduler 获取 KV connector。
+        if kv_connector is not None:                                        # 如果有 KV connector，就从 workers 收集 KV transfer 元信息。
             # Collect and store KV connector xfer metadata from workers
             # (after KV cache registration)
             xfer_handshake_metadata = (
@@ -194,65 +194,65 @@ class EngineCore:           # 定义V1 engine的内部核心类
                 content: dict[tuple[int, int], Any] = {}
                 for worker_dict in xfer_handshake_metadata:
                     if worker_dict is not None:
-                        content.update(worker_dict)
-                kv_connector.set_xfer_handshake_metadata_pp_aware(content)
+                        content.update(worker_dict)                     # 合并各 worker 返回的 (pp_rank, tp_rank) -> metadata。
+                kv_connector.set_xfer_handshake_metadata_pp_aware(content)      # 把 PP-aware 的 KV transfer metadata 交给 connector。
 
         # Setup batch queue for pipeline parallelism.
         # Batch queue for scheduled batches. This enables us to asynchronously
         # schedule and execute batches, and is required by pipeline parallelism
         # to eliminate pipeline bubbles.
-        self.batch_queue_size = vllm_config.max_concurrent_batches
-        self.batch_queue: (
+        self.batch_queue_size = vllm_config.max_concurrent_batches          # 设置并发 batch queue 大小，pipeline parallel 会用到。
+        self.batch_queue: (                                                                     # 默认不启用 batch queue。
             deque[tuple[Future[ModelRunnerOutput], SchedulerOutput, Future[Any]]] | None
         ) = None
-        if self.batch_queue_size > 1:
+        if self.batch_queue_size > 1:                                       # 多并发 batch 时启用队列，用来减少 pipeline bubble。
             logger.debug("Batch queue is enabled with size %d", self.batch_queue_size)
-            self.batch_queue = deque(maxlen=self.batch_queue_size)
+            self.batch_queue = deque(maxlen=self.batch_queue_size)          # 创建固定长度 batch 队列，里面放执行 future、scheduler output 等。
 
-        self.is_ec_consumer = (
+        self.is_ec_consumer = (                                             # 判断当前 EngineCore 是否是 disaggregated / EC transfer 的 consumer。
             vllm_config.ec_transfer_config is None
             or vllm_config.ec_transfer_config.is_ec_consumer
         )
-        self.is_pooling_model = vllm_config.model_config.runner_type == "pooling"
+        self.is_pooling_model = vllm_config.model_config.runner_type == "pooling"       # 判断模型 runner 是否是 pooling 类型。
 
-        self.request_block_hasher: Callable[[Request], list[BlockHash]] | None = None
-        if vllm_config.cache_config.enable_prefix_caching or kv_connector is not None:
-            caching_hash_fn = get_hash_fn_by_name(
+        self.request_block_hasher: Callable[[Request], list[BlockHash]] | None = None       # 默认不计算请求 block hash。
+        if vllm_config.cache_config.enable_prefix_caching or kv_connector is not None:          # 如果需要 prefix cache 或 KV transfer，则初始化请求 block hash 计算函数。
+            caching_hash_fn = get_hash_fn_by_name(                                          # 根据配置选择 hash 算法。
                 vllm_config.cache_config.prefix_caching_hash_algo
             )
-            init_none_hash(caching_hash_fn)
+            init_none_hash(caching_hash_fn)                                             # 初始化空 block/hash 的特殊值。
 
-            self.request_block_hasher = get_request_block_hasher(
+            self.request_block_hasher = get_request_block_hasher(                       # 创建针对 Request 的 block hash 函数。
                 hash_block_size, caching_hash_fn
             )
 
         self.step_fn = (
-            self.step if self.batch_queue is None else self.step_with_batch_queue
+            self.step if self.batch_queue is None else self.step_with_batch_queue       # 根据是否启用 batch queue 选择主循环 step 函数。
         )
-        self.async_scheduling = vllm_config.scheduler_config.async_scheduling
+        self.async_scheduling = vllm_config.scheduler_config.async_scheduling           # 保存是否启用异步调度。
 
-        self.aborts_queue = queue.Queue[list[str]]()
+        self.aborts_queue = queue.Queue[list[str]]()                                    # 创建 abort 队列，用于模型执行期间收集取消请求。
 
-        self._idle_state_callbacks: list[Callable] = []
+        self._idle_state_callbacks: list[Callable] = []                                 # 保存 idle 状态回调列表。
 
         # Mark the startup heap as static so that it's ignored by GC.
         # Reduces pause times of oldest generation collections.
-        freeze_gc_heap()
+        freeze_gc_heap()                                                                # 冻结启动期对象，减少 Python GC 老年代扫描暂停。
         # If enable, attach GC debugger after static variable freeze.
-        maybe_attach_gc_debug_callback()
+        maybe_attach_gc_debug_callback()                                                # 如果配置开启，挂载 GC 调试回调。
         # Enable environment variable cache (e.g. assume no more
         # environment variable overrides after this point)
-        enable_envs_cache()
+        enable_envs_cache()                                                             # 启用环境变量缓存，假设后续不再动态改 env。
 
-    @instrument(span_name="Prepare model")
-    def _initialize_kv_caches(self, vllm_config: VllmConfig) -> KVCacheConfig:
+    @instrument(span_name="Prepare model")                                              # 给模型准备阶段加 tracing span。
+    def _initialize_kv_caches(self, vllm_config: VllmConfig) -> KVCacheConfig:          
         start = time.time()
 
         # register all kvcache specs in enginecore process.
-        register_all_kvcache_specs(vllm_config)
+        register_all_kvcache_specs(vllm_config)                                         # 注册所有 KV cache spec 类型。
 
         # Get all kv cache needed by the model
-        kv_cache_specs = self.model_executor.get_kv_cache_specs()
+        kv_cache_specs = self.model_executor.get_kv_cache_specs()                       # 从 worker/model executor 收集每层 KV cache 需求。
 
         # Some layers (e.g. Prefix LM attention) run non-causally and tag their
         # KV cache spec with ``non_causal=True``. The specs are collected here in
@@ -261,22 +261,22 @@ class EngineCore:           # 定义V1 engine的内部核心类
         # signal into a scheduling policy: chunked prefill and prefix caching
         # both assume causal attention and would corrupt non-causal prefill.
         if any(
-            getattr(spec, "non_causal", False)
+            getattr(spec, "non_causal", False)                                          # 如果有非因果 attention 层，chunked prefill 和 prefix caching 可能不安全。
             for worker_specs in kv_cache_specs
             for spec in worker_specs.values()
         ):
-            if vllm_config.scheduler_config.enable_chunked_prefill:
+            if vllm_config.scheduler_config.enable_chunked_prefill:                     # 非因果 attention 下禁用 chunked prefill。
                 logger.info(
                     "Disabling chunked prefill: model has non-causal attention layers."
                 )
                 vllm_config.scheduler_config.enable_chunked_prefill = False
-            if vllm_config.cache_config.enable_prefix_caching:
+            if vllm_config.cache_config.enable_prefix_caching:                          # 非因果 attention 下禁用 prefix caching。
                 logger.info(
                     "Disabling prefix caching: model has non-causal attention layers."
                 )
                 vllm_config.cache_config.enable_prefix_caching = False
 
-        has_kv_cache = any(kv_cache_spec for kv_cache_spec in kv_cache_specs)
+        has_kv_cache = any(kv_cache_spec for kv_cache_spec in kv_cache_specs)           # 判断模型是否真的需要 KV cache。
         if has_kv_cache:
             if envs.VLLM_ELASTIC_EP_SCALE_UP_LAUNCH:
                 # NOTE(yongji): should already be set
@@ -288,47 +288,47 @@ class EngineCore:           # 定义V1 engine的内部核心类
             else:
                 # Profiles the peak memory usage of the model to determine how
                 # much memory can be allocated for kv cache.
-                available_gpu_memory = self.model_executor.determine_available_memory()
-                self.available_gpu_memory_for_kv_cache = available_gpu_memory[0]
+                available_gpu_memory = self.model_executor.determine_available_memory() # 正常场景下通过 profiling 计算 KV cache 可用 GPU 内存。
+                self.available_gpu_memory_for_kv_cache = available_gpu_memory[0]    
         else:
             # Attention free models don't need memory for kv cache
-            available_gpu_memory = [0] * len(kv_cache_specs)
+            available_gpu_memory = [0] * len(kv_cache_specs)                            # attention-free 模型不需要给 KV cache 分配显存。
 
-        assert len(kv_cache_specs) == len(available_gpu_memory)
+        assert len(kv_cache_specs) == len(available_gpu_memory)                         # 确认每个 worker 的 KV spec 和可用内存数量匹配。
 
         # Track max_model_len before KV cache config to detect auto-fit changes
-        max_model_len_before = vllm_config.model_config.max_model_len
+        max_model_len_before = vllm_config.model_config.max_model_len                   # 记录 KV cache 配置前的最大模型长度。
 
-        kv_cache_configs = get_kv_cache_configs(
+        kv_cache_configs = get_kv_cache_configs(                                        # 根据模型需求和可用显存生成每个 worker 的 KV cache 配置。
             vllm_config, kv_cache_specs, available_gpu_memory
         )
 
         # If auto-fit reduced max_model_len, sync the new value to workers.
         # This is needed because workers were spawned before memory profiling
         # and have the original (larger) max_model_len cached.
-        max_model_len_after = vllm_config.model_config.max_model_len
+        max_model_len_after = vllm_config.model_config.max_model_len                    # auto-fit 可能会缩短 max_model_len，这里重新读取。
         if max_model_len_after != max_model_len_before:
-            self.collective_rpc("update_max_model_len", args=(max_model_len_after,))
+            self.collective_rpc("update_max_model_len", args=(max_model_len_after,))    # 如果 max_model_len 被改了，同步给 workers。
 
-        scheduler_kv_cache_config = generate_scheduler_kv_cache_config(kv_cache_configs)
-        vllm_config.cache_config.num_gpu_blocks = scheduler_kv_cache_config.num_blocks
+        scheduler_kv_cache_config = generate_scheduler_kv_cache_config(kv_cache_configs)# 生成 scheduler 侧需要的 KV cache 逻辑配置。
+        vllm_config.cache_config.num_gpu_blocks = scheduler_kv_cache_config.num_blocks  # 把 scheduler 看到的 block 数写回全局配置。
         kv_cache_groups = scheduler_kv_cache_config.kv_cache_groups
         if kv_cache_groups:
-            vllm_config.cache_config.block_size = min(
+            vllm_config.cache_config.block_size = min(                                  # 从 KV cache group 中取最小 block size 作为全局 block size。
                 g.kv_cache_spec.block_size for g in kv_cache_groups
             )
-            num_tokens, max_concurrency = get_kv_cache_capacity(
+            num_tokens, max_concurrency = get_kv_cache_capacity(                        # 计算 KV cache 总 token 容量和最大并发能力
                 vllm_config, scheduler_kv_cache_config
             )
-            vllm_config.cache_config.kv_cache_size_tokens = num_tokens
-            vllm_config.cache_config.kv_cache_max_concurrency = max_concurrency
+            vllm_config.cache_config.kv_cache_size_tokens = num_tokens                  # 保存 KV cache token 总容量。
+            vllm_config.cache_config.kv_cache_max_concurrency = max_concurrency         # 保存理论最大并发。
 
-        vllm_config.validate_block_size()
+        vllm_config.validate_block_size()                                               # 校验 block size 配置是否合法。
 
         # Initialize kv cache and warmup the execution
-        self.model_executor.initialize_from_config(kv_cache_configs)
+        self.model_executor.initialize_from_config(kv_cache_configs)                    # 让 workers 真正创建 KV cache，并做 warmup。
 
-        elapsed = time.time() - start
+        elapsed = time.time() - start                                                   # 区分是否包含 language model / encoder compile time。
         compile_time = vllm_config.compilation_config.compilation_time
         encoder_compile_time = vllm_config.compilation_config.encoder_compilation_time
         if encoder_compile_time > 0:
@@ -353,19 +353,19 @@ class EngineCore:           # 定义V1 engine的内部核心类
                 "init engine (profile, create kv cache, warmup model) took %.2f s",
                 elapsed,
             )
-        return scheduler_kv_cache_config
+        return scheduler_kv_cache_config                                            # 返回 scheduler 使用的 KV cache 配置。
 
-    def get_supported_tasks(self) -> tuple[SupportedTask, ...]:
+    def get_supported_tasks(self) -> tuple[SupportedTask, ...]:                     # 直接返回 executor 支持的任务类型。
         return self.model_executor.supported_tasks
 
-    def get_kv_cache_group_metadata(self) -> list[dict[str, int | str | None]]:
+    def get_kv_cache_group_metadata(self) -> list[dict[str, int | str | None]]:     # 导出 scheduler KV cache group 的可序列化元信息。
         """Return msgspec-serializable metadata for scheduler KV cache groups."""
-        kv_cache_config = getattr(self.scheduler, "kv_cache_config", None)
-        if kv_cache_config is None:
+        kv_cache_config = getattr(self.scheduler, "kv_cache_config", None)          # 从 scheduler 上安全获取 KV cache 配置。
+        if kv_cache_config is None:                                                 # 没有 KV cache 配置时返回空列表。
             return []
 
         metadata: list[dict[str, int | str | None]] = []
-        for group_idx, group in enumerate(kv_cache_config.kv_cache_groups):
+        for group_idx, group in enumerate(kv_cache_config.kv_cache_groups):         # 每个 group 记录 index、cache 类型、block size、sliding window。
             spec = group.kv_cache_spec
             metadata.append(
                 {
@@ -377,19 +377,19 @@ class EngineCore:           # 定义V1 engine的内部核心类
             )
         return metadata
 
-    def add_request(self, request: Request, request_wave: int = 0):
+    def add_request(self, request: Request, request_wave: int = 0):                 # 把请求加入 scheduler。
         """Add request to the scheduler.
 
         `request_wave`: indicate which wave of requests this is expected to
         belong to in DP case
         """
         # Validate the request_id type.
-        if not isinstance(request.request_id, str):
+        if not isinstance(request.request_id, str):                                 # vLLM 要求 request id 必须是字符串。
             raise TypeError(
                 f"request_id must be a string, got {type(request.request_id)}"
             )
 
-        if pooling_params := request.pooling_params:
+        if pooling_params := request.pooling_params:                                # 如果是 pooling 请求，校验 task 是否被当前模型支持。
             supported_pooling_tasks = [
                 task for task in self.get_supported_tasks() if task in POOLING_TASKS
             ]
@@ -400,7 +400,7 @@ class EngineCore:           # 定义V1 engine的内部核心类
                     f"Supported tasks: {supported_pooling_tasks}"
                 )
 
-        if request.kv_transfer_params is not None and (
+        if request.kv_transfer_params is not None and (                             # 请求带 KV transfer 参数但 scheduler 没有 KV connector 时，打印 warning 并忽略。
             not self.scheduler.get_kv_connector()
         ):
             logger.warning(
@@ -408,19 +408,19 @@ class EngineCore:           # 定义V1 engine的内部核心类
                 "Disabling KVTransfer for this request."
             )
 
-        self.scheduler.add_request(request)
+        self.scheduler.add_request(request)                                         # 真正把请求交给调度器 waiting queue。
         if request.abort_immediately:
             # Immediately abort so the connector's request_finished hook runs
             # to free any pre-admission KV-transfer resources.
-            self.abort_requests([request.request_id])
+            self.abort_requests([request.request_id])                               # 如果请求构造时就需要立刻取消，则立即 abort，确保 connector 资源被释放。
 
-    def abort_requests(self, request_ids: list[str]):
+    def abort_requests(self, request_ids: list[str]):                               # 对外暴露取消请求接口。
         """Abort requests from the scheduler."""
 
         # TODO: The scheduler doesn't really need to know the
         # specific finish reason, TBD whether we propagate that
         # (i.e. client-aborted vs stop criteria met).
-        self.scheduler.finish_requests(request_ids, RequestStatus.FINISHED_ABORTED)
+        self.scheduler.finish_requests(request_ids, RequestStatus.FINISHED_ABORTED) # 通知 scheduler 把这些请求标记为 aborted。
 
     @contextmanager
     def log_error_detail(self, scheduler_output: SchedulerOutput):
@@ -484,7 +484,7 @@ class EngineCore:           # 定义V1 engine的内部核心类
         Overridden by the DP engine core; never throttles otherwise."""
         return False
 
-    def step(self) -> tuple[dict[int, EngineCoreOutputs], bool]:
+    def step(self) -> tuple[dict[int, EngineCoreOutputs], bool]:                        # 单轮调度、执行、更新输出。
         """Schedule, execute, and make output.
 
         Returns tuple of outputs and a flag indicating whether the model
@@ -493,36 +493,36 @@ class EngineCore:           # 定义V1 engine的内部核心类
 
         # Check for any requests remaining in the scheduler - unfinished,
         # or finished and not yet removed from the batch.
-        if not self.scheduler.has_requests():
+        if not self.scheduler.has_requests():                                           # 如果 scheduler 没有任何未完成或待清理请求，直接返回空输出。
             return {}, False
-        scheduler_output = self.scheduler.schedule(self._should_throttle_prefills())
-        future = self.model_executor.execute_model(scheduler_output, non_block=True)
-        grammar_output = self.scheduler.get_grammar_bitmask(scheduler_output)
+        scheduler_output = self.scheduler.schedule(self._should_throttle_prefills())    # 让 scheduler 选择本轮要执行哪些请求、每个请求多少 token、KV block 如何分配。
+        future = self.model_executor.execute_model(scheduler_output, non_block=True)    # 异步发起模型执行。
+        grammar_output = self.scheduler.get_grammar_bitmask(scheduler_output)           # 如果有结构化输出约束，生成 grammar bitmask。
         with (
-            self.log_error_detail(scheduler_output),
+            self.log_error_detail(scheduler_output),                                    # 包一层异常 dump 和 iteration 统计。
             self.log_iteration_details(scheduler_output),
         ):
-            model_output = future.result()
-            if model_output is None:
-                model_output = self.model_executor.sample_tokens(grammar_output)
+            model_output = future.result()                                              # 等待模型 forward 结果。
+            if model_output is None:                                                    # 有些路径 forward 后还需要单独采样 token。
+                model_output = self.model_executor.sample_tokens(grammar_output)        # 根据 grammar bitmask 做采样。
 
         # Before processing the model output, process any aborts that happened
         # during the model execution.
-        self._process_aborts_queue()
-        engine_core_outputs = self.scheduler.update_from_output(
+        self._process_aborts_queue()                                                    # 处理模型执行期间进入的 abort 请求。
+        engine_core_outputs = self.scheduler.update_from_output(                        # 把模型输出交回 scheduler，更新 request 状态、完成状态、KV cache 等。
             scheduler_output, model_output
         )
 
-        return engine_core_outputs, scheduler_output.total_num_scheduled_tokens > 0
+        return engine_core_outputs, scheduler_output.total_num_scheduled_tokens > 0     # 返回前端输出，以及本轮是否真的执行了 token。
 
-    def post_step(self, model_executed: bool) -> None:
+    def post_step(self, model_executed: bool) -> None:                                  
         # When using async scheduling we can't get draft token ids in advance,
         # so we update draft token ids in the worker process and don't
         # need to update draft token ids here.
-        if self.check_for_draft_tokens and not self.async_scheduling and model_executed:
-            draft_token_ids = self.model_executor.take_draft_token_ids()
+        if self.check_for_draft_tokens and not self.async_scheduling and model_executed:    # 如果使用 spec decode/diffusion 且非 async scheduling，需要同步 draft token。
+            draft_token_ids = self.model_executor.take_draft_token_ids()                    # 从 executor 取 draft tokens。
             if draft_token_ids is not None:
-                self.scheduler.update_draft_token_ids(draft_token_ids)
+                self.scheduler.update_draft_token_ids(draft_token_ids)                      # 交给 scheduler 更新 speculative decoding 状态。
 
     def step_with_batch_queue(
         self,
