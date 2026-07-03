@@ -920,23 +920,29 @@ class EngineCoreProc(EngineCore):
         *,
         engine_index: int = 0,
     ):
+        # 创建输入/输出队列用于线程间通信
         self.input_queue = queue.Queue[tuple[EngineCoreRequestType, Any]]()
         self.output_queue = queue.Queue[tuple[int, EngineCoreOutputs] | bytes]()
+        # executor 失败时的回调函数
         executor_fail_callback = lambda: self.input_queue.put_nowait(
             (EngineCoreRequestType.EXECUTOR_FAILED, b"")
         )
 
+        # 保存引擎索引和身份标识
         self.engine_index = engine_index
         identity = self.engine_index.to_bytes(length=2, byteorder="little")
+        # 初始化引擎运行状态
         self.engines_running = False
         self.shutdown_state = EngineShutdownState.RUNNING
 
         # Receiver for tensor IPC
         self.tensor_ipc_receiver: TensorIpcReceiver | None = None
+        # 初始化多模态张量 IPC 接收器（若需要）
         if tensor_queue is not None:
             self.tensor_ipc_receiver = TensorIpcReceiver(tensor_queue)
             logger.info("Using tensor IPC queue for multimodal tensor sharing")
 
+        # 执行握手协议，建立 ZMQ 连接
         with self._perform_handshakes(
             handshake_address,
             identity,
@@ -945,6 +951,7 @@ class EngineCoreProc(EngineCore):
             client_handshake_address,
         ) as addresses:
             # Set up data parallel environment.
+            # 检查是否有数据并行协调器
             self.has_coordinator = addresses.coordinator_output is not None
             self.frontend_stats_publish_address = (
                 addresses.frontend_stats_publish_address
@@ -969,8 +976,10 @@ class EngineCoreProc(EngineCore):
                     EEPNotificationType.NEW_CORE_ENGINES_INIT_READY,
                     vllm_config=vllm_config,
                 )
+            # 初始化数据并行环境
             self._init_data_parallel(vllm_config)
 
+            # 调用父类初始化
             super().__init__(
                 vllm_config,
                 executor_class,
@@ -984,6 +993,7 @@ class EngineCoreProc(EngineCore):
             # and to overlap some serialization/deserialization with the
             # model forward pass.
             # Threads handle Socket <-> Queues and core_busy_loop uses Queue.
+            # 启动输入/输出 I/O 线程（后台处理 ZMQ 通信）
             ready_event = threading.Event()
             input_thread = threading.Thread(
                 target=self.process_input_sockets,
@@ -1266,11 +1276,11 @@ class EngineCoreProc(EngineCore):
 
     def run_busy_loop(self):
         """Core busy loop of the EngineCore."""
-        while self._handle_shutdown():
+        while self._handle_shutdown():                   # 检查是否应继续运行
             # 1) Poll the input queue until there is work to do.
-            self._process_input_queue()
+            self._process_input_queue()                  # 处理来自客户端的请求
             # 2) Step the engine core and return the outputs.
-            self._process_engine_step()
+            self._process_engine_step()                  # 执行一步调度和模型前向
 
         raise SystemExit
 
