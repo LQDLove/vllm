@@ -87,7 +87,7 @@ class SchedulerInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def update_from_output(
+    def update_from_output(                                                     # 根据计划的执行结果来更新系统状态
         self,
         scheduler_output: "SchedulerOutput",
         model_runner_output: "ModelRunnerOutput",

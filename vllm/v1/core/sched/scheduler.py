@@ -1485,10 +1485,10 @@ class Scheduler(SchedulerInterface):
         )
         return GrammarOutput(structured_output_request_ids, bitmask)
 
-    def update_from_output(
+    def update_from_output(                                                                 # 根据计划的执行结果来更新系统状态
         self,
-        scheduler_output: SchedulerOutput,
-        model_runner_output: ModelRunnerOutput,
+        scheduler_output: SchedulerOutput,                                                  # 本轮调度器做出的计划（包含哪些请求在跑、占用了哪些Block）
+        model_runner_output: ModelRunnerOutput,                                             # GPU 实际执行模型后吐出的结果（包含生成的 Token、是否结束等）
     ) -> dict[int, EngineCoreOutputs]:
         sampled_token_ids = model_runner_output.sampled_token_ids
         logprobs = model_runner_output.logprobs
@@ -1509,6 +1509,7 @@ class Scheduler(SchedulerInterface):
         if self.perf_metrics and self.perf_metrics.is_enabled():
             perf_stats = self.perf_metrics.get_step_perf_stats_per_gpu(scheduler_output)
 
+        # 准备存储本轮结束运行的请求、需要返回给客户端的输出等
         outputs: dict[int, list[EngineCoreOutput]] = defaultdict(list)
         spec_decoding_stats: SpecDecodingStats | None = None
 
@@ -1548,6 +1549,7 @@ class Scheduler(SchedulerInterface):
         # to avoid expensive operations inside the loop.
         stopped_running_reqs: set[Request] = set()
         stopped_preempted_reqs: set[Request] = set()
+        # 2. 遍历本轮所有被调度上场的请求，开始核对
         for req_id, num_tokens_scheduled in num_scheduled_tokens.items():
             assert num_tokens_scheduled > 0
             if failed_kv_load_req_ids and req_id in failed_kv_load_req_ids:

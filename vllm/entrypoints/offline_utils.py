@@ -346,6 +346,7 @@ class OfflineInferenceMixin:
             tokenization_kwargs=tokenization_kwargs,
             mm_processor_kwargs=mm_processor_kwargs,
         )
+        # 4. 运行引擎直到完成
         return self._run_engine(use_tqdm=use_tqdm, output_type=output_type)
 
     def _run_chat(
@@ -577,6 +578,7 @@ class OfflineInferenceMixin:
         use_tqdm: bool | Callable[..., tqdm] = True,
     ) -> list[_O]:
         # Initialize tqdm.
+        # 使用 tqdm 显示进度（可选）
         if use_tqdm:
             num_requests = self.llm_engine.get_num_unfinished_requests()
             tqdm_func = use_tqdm if callable(use_tqdm) else tqdm
@@ -592,6 +594,7 @@ class OfflineInferenceMixin:
         total_in_toks = 0
         total_out_toks = 0
         while self.llm_engine.has_unfinished_requests():
+            # 执行一步
             step_outputs = self.llm_engine.step()
             for output in step_outputs:
                 assert isinstance(output, output_type)
@@ -623,4 +626,5 @@ class OfflineInferenceMixin:
         # Sort the outputs by request ID.
         # This is necessary because some requests may be finished earlier than
         # its previous requests.
+        # 按请求 ID 排序返回
         return sorted(outputs, key=lambda x: int(x.request_id))

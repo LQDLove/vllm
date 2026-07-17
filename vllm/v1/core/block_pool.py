@@ -182,12 +182,14 @@ class BlockPool:
         self.free_block_queue = FreeKVCacheBlockQueue(self.blocks)
 
         # Cache for block lookup
+        # 缓存查找表
         self.cached_block_hash_to_block: BlockHashToBlockMap = BlockHashToBlockMap()
         self.cached_block_hashes_by_block: dict[int, set[BlockHashWithGroupId]] = {}
 
         # To represent a placeholder block with block_id=0.
         # The ref_cnt of null_block is not maintained, needs special care to
         # avoid freeing it.
+        # 占位符块（用于填充 Block Table 中的空位）,是第一个被"分配"的块（block_id=0），但它实际上是一个占位符，永远不会存储真实数据。
         self.null_block = self.free_block_queue.popleft()
         self.null_block.is_null = True
 
@@ -257,6 +259,11 @@ class BlockPool:
                 that can never serve a hit stay out of the prefix-cache hash
                 map.
         """
+        """
+            缓存新的满块。
+            为每个新满块计算 hash 并加入缓存表。
+        """
+        # 1. 边界条件判断：如果当前已填满的块数没有超过已经缓存的块数，说明没有新满的块需要缓存，直接返回
         if num_cached_blocks >= num_full_blocks:
             return
         new_full_blocks = blocks[num_cached_blocks:num_full_blocks]
@@ -283,10 +290,12 @@ class BlockPool:
             # in align mode. We skip null blocks here.
             if blk.is_null or (block_mask is not None and not block_mask[i]):
                 continue
+            # 获取块的 hash
             block_hash = new_block_hashes[i]
             num_hash_tokens = (num_cached_blocks + i + 1) * block_size
 
             # Update and added the full block to the cache.
+            # 设置块的 hash
             block_hash_with_group_id = make_block_hash_with_group_id(
                 block_hash, kv_cache_group_id
             )
@@ -299,6 +308,7 @@ class BlockPool:
                 )
                 removed_hashes = self._remove_cached_block_hashes(blk)
                 self._emit_block_removed_events(removed_hashes)
+            # 加入缓存表
             self._insert_block_hash(
                 block_hash_with_group_id,
                 blk,
@@ -550,14 +560,21 @@ class BlockPool:
         Returns:
             A list of new block.
         """
+        """
+            从空闲队列分配指定数量的块。
+
+            如果启用了缓存，可能会驱逐一些缓存块来腾出空间。
+        """
         if num_blocks > self.get_num_free_blocks():
             raise ValueError(f"Cannot get {num_blocks} free blocks from the pool")
 
+        # 从队列头部弹出 n 个块
         ret: list[KVCacheBlock] = self.free_block_queue.popleft_n(num_blocks)
 
         # In order to only iterate the list once, we duplicated code a bit
         if self.enable_caching:
             for block in ret:
+                # 如果块之前被缓存过，需要驱逐它
                 self._maybe_evict_cached_block(block)
                 assert block.ref_cnt == 0
                 block.ref_cnt += 1

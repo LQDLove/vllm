@@ -175,24 +175,24 @@ class LLM(BeamSearchOfflineMixin, PoolingOfflineMixin, OfflineInferenceMixin):
 
     def __init__(
         self,
-        model: str,
+        model: str,                                         # 模型路径或名称
         *,
         runner: RunnerOption = "auto",
         convert: ConvertOption = "auto",
-        tokenizer: str | None = None,
-        tokenizer_mode: TokenizerMode | str = "auto",
+        tokenizer: str | None = None,                       # 分词器路径
+        tokenizer_mode: TokenizerMode | str = "auto",       # 分词器模式
         skip_tokenizer_init: bool = False,
-        trust_remote_code: bool = False,
+        trust_remote_code: bool = False,                    # 信任远程代码
         allowed_local_media_path: str = "",
         allowed_media_domains: list[str] | None = None,
-        tensor_parallel_size: int = 1,
-        dtype: ModelDType = "auto",
-        quantization: QuantizationMethods | None = None,
+        tensor_parallel_size: int = 1,                      # 张量并行大小
+        dtype: ModelDType = "auto",                         # 数据类型
+        quantization: QuantizationMethods | None = None,    # 量化方法
         revision: str | None = None,
         tokenizer_revision: str | None = None,
         chat_template: Path | str | None = None,
         seed: int = 0,
-        gpu_memory_utilization: float = 0.92,
+        gpu_memory_utilization: float = 0.92,               # GPU 内存利用率
         cpu_offload_gb: float = 0,
         offload_group_size: int = 0,
         offload_num_in_group: int = 1,
@@ -346,12 +346,14 @@ class LLM(BeamSearchOfflineMixin, PoolingOfflineMixin, OfflineInferenceMixin):
 
         log_non_default_args(engine_args)
 
+        # 2. 创建 LLMEngine
         self.llm_engine = LLMEngine.from_engine_args(
             engine_args=engine_args, usage_context=UsageContext.LLM_CLASS
         )
         self.model_config = self.llm_engine.model_config
         self.engine_class = type(self.llm_engine)
 
+        # 4. 请求计数器
         self.request_counter = Counter()
         self.default_sampling_params: dict[str, Any] | None = None
 
@@ -421,11 +423,11 @@ class LLM(BeamSearchOfflineMixin, PoolingOfflineMixin, OfflineInferenceMixin):
 
     def generate(
         self,
-        prompts: PromptType | Sequence[PromptType],
-        sampling_params: SamplingParams | Sequence[SamplingParams] | None = None,
+        prompts: PromptType | Sequence[PromptType],                                         # 输入的提示
+        sampling_params: SamplingParams | Sequence[SamplingParams] | None = None,           # 采样参数
         *,
-        use_tqdm: bool | Callable[..., tqdm] = True,
-        lora_request: Sequence[LoRARequest] | LoRARequest | None = None,
+        use_tqdm: bool | Callable[..., tqdm] = True,                                        # 是否显示进度条
+        lora_request: Sequence[LoRARequest] | LoRARequest | None = None,                    # LoRA 适配器请求
         priority: list[int] | None = None,
         tokenization_kwargs: dict[str, Any] | None = None,
         mm_processor_kwargs: dict[str, Any] | None = None,

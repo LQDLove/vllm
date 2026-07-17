@@ -479,7 +479,7 @@ class EngineCore:           # 定义V1 engine的内部核心类
         )
         self._iteration_index += 1
 
-    def _should_throttle_prefills(self) -> bool:
+    def _should_throttle_prefills(self) -> bool:                                        # 限制分块预填充，主要是长token
         """Whether to defer new prefills this step (DP prefill balancing).
         Overridden by the DP engine core; never throttles otherwise."""
         return False
@@ -510,7 +510,7 @@ class EngineCore:           # 定义V1 engine的内部核心类
         # during the model execution.
         self._process_aborts_queue()                                                    # 处理模型执行期间进入的 abort 请求。
         engine_core_outputs = self.scheduler.update_from_output(                        # 把模型输出交回 scheduler，更新 request 状态、完成状态、KV cache 等。
-            scheduler_output, model_output
+            scheduler_output, model_output                                              # “根据计划的执行结果来更新系统状态”
         )
 
         return engine_core_outputs, scheduler_output.total_num_scheduled_tokens > 0     # 返回前端输出，以及本轮是否真的执行了 token。
