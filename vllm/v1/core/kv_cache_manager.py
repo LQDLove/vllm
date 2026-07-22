@@ -123,7 +123,7 @@ class KVCacheManager:
         pcp_world_size: int = 1,
         metrics_collector: KVCacheMetricsCollector | None = None,
         watermark: float = 0.0,
-    ) -> None:
+    ) -> None: 
         self.max_model_len = max_model_len
         # When unset, fall back to `max_model_len` so the recycling-aware cap
         # collapses to the prior (uncapped) admission behavior. The scheduler
@@ -243,17 +243,17 @@ class KVCacheManager:
 
     def allocate_slots(
         self,
-        request: Request,
-        num_new_tokens: int,
-        num_new_computed_tokens: int = 0,
-        new_computed_blocks: KVCacheBlocks | None = None,
-        num_lookahead_tokens: int = 0,
-        num_external_computed_tokens: int = 0,
-        delay_cache_blocks: bool = False,
-        num_encoder_tokens: int = 0,
-        full_sequence_must_fit: bool = False,
-        reserved_blocks: int = 0,
-        has_scheduled_reqs: bool = True,
+        request: Request,                                       # 要分配 slots 的请求
+        num_new_tokens: int,                                    # 需要分配并计算的新 token 数量
+        num_new_computed_tokens: int = 0,                       # 刚刚命中 prefix caching 的新计算 token 数，不包含外部 token
+        new_computed_blocks: KVCacheBlocks | None = None,       # 上述新计算 token 对应的缓存块，按 kv cache group 分组
+        num_lookahead_tokens: int = 0,                          # 要分配的投机 token 数，用于 Eagle 等带 kv-cache 的 spec decode proposer
+        num_external_computed_tokens: int = 0,                  # KV 不是由 vLLM 缓存、而是由 connector 缓存的 token 数
+        delay_cache_blocks: bool = False,                       # 是否跳过缓存块。用于 P/D 场景，分配未来某步才会完成 KV transfer 的块
+        num_encoder_tokens: int = 0,                            # encoder-decoder 模型（如 Whisper）中为 cross-attention 分配的 encoder token 数，decoder-only 模型应为 0
+        full_sequence_must_fit: bool = False,                   # 仅当 KV cache 有足够空闲块容纳整个序列（考虑 prefix cache hit 和 sliding window）时才分配。用作准入控制，防止 chunked prefill 只检查第一个 chunk 时过度准入请求
+        reserved_blocks: int = 0,                               # 必须留给其他正在运行序列的空闲块数。实际分配只有在 (free_blocks - reserved_blocks) 范围内才能成功。用于限制 async KV-connector 加载，避免其占用已在运行的序列所需的块
+        has_scheduled_reqs: bool = True,                        # 当前 step 是否已有其他请求被调度，控制是否应用 watermark
     ) -> KVCacheBlocks | None:
         """Add slots for a request with new tokens to append.
 
@@ -337,14 +337,31 @@ class KVCacheManager:
         Returns:
             A list of new allocated blocks.
         """
+        """为请求分配 slots 以追加新 token。
+
+            分配包含三个阶段：
+            1. 释放 comp 中不必要的 blocks 并检查是否有足够空闲 blocks
+            2. 处理 prefix tokens (comp + new_comp + ext_comp):
+                - 释放不必要的 blocks（如在滑动窗口外）
+                - 为 sliding window 内的 ext_comp tokens 分配新 blocks
+            3. 分配待计算的 tokens 的新 blocks (new + lookahead)
+
+            Blocks 布局示意：
+            ----------------------------------------------------------------------
+            | < comp > | < new_comp > | < ext_comp >  | < new >  | < lookahead > |
+            ----------------------------------------------------------------------
+                                                        |   < to be computed >     |
+        """
         # When loading KV data asynchronously, we may have zero new tokens to
         # compute while still allocating slots for externally computed tokens.
+        # 只有在异步加载外部 KV 数据时，才允许 num_new_tokens=0。如果没有外部计算 token 且没有新 token，则报错。
         if num_new_tokens == 0 and num_external_computed_tokens == 0:
             raise ValueError(
                 "num_new_tokens must be greater than 0 when there are no "
                 "external computed tokens"
             )
 
+        # 处理 prefix cache 命中的块：如果有新命中的缓存块则使用它，否则使用空块列表。
         if new_computed_blocks is not None:
             new_computed_block_list = new_computed_blocks.blocks
         else:
@@ -352,14 +369,18 @@ class KVCacheManager:
 
         # The number of computed tokens is the number of computed tokens plus
         # the new prefix caching hits
+        # 本地已计算 token 数：请求原本已计算的 token 数，加上本次新命中 prefix cache 的 token 数。
         num_local_computed_tokens = (
             request.num_computed_tokens + num_new_computed_tokens
         )
+
+        # 总已计算 token 数：本地已计算 token 加上外部 connector 缓存的 token，但不能超过模型最大长度。
         total_computed_tokens = min(
             num_local_computed_tokens + num_external_computed_tokens,
             self.max_model_len,
         )
 
+        # 计算 watermark：只为等待中或被抢占的请求预留水位线块，且当前已有其他请求被调度时才生效。
         watermark_blocks = 0
         # The watermark is applied to waiting/preempted requests only, and only
         # when there's at least one request already scheduled.
@@ -369,6 +390,7 @@ class KVCacheManager:
         ):
             watermark_blocks = self.watermark_blocks
 
+        # ===== 阶段 0: 可选的全序列适配检查 =====
         if full_sequence_must_fit:
             # First check and fail if the full request sequence won't fit.
             full_num_tokens = min(request.num_tokens, self.max_model_len)
@@ -397,10 +419,12 @@ class KVCacheManager:
         # insufficient free blocks.
         # Should call this function before allocating new blocks to reduce
         # the number of evicted blocks.
+        # ===== 阶段 1: 释放滑动窗口外的 blocks =====
         self.coordinator.remove_skipped_blocks(
             request.request_id, total_computed_tokens
         )
 
+        # ===== 阶段 2: 计算需要的 block 数量 =====
         num_blocks_to_allocate = self.coordinator.get_num_blocks_to_allocate(
             request_id=request.request_id,
             num_tokens=num_tokens_need_slot,
@@ -415,10 +439,12 @@ class KVCacheManager:
         # additional watermark of headroom for waiting/preempted admissions.
         available_blocks = self.block_pool.get_num_free_blocks() - reserved_blocks
         required_blocks = num_blocks_to_allocate + watermark_blocks
+        # 检查是否有足够的空闲 blocks
         if required_blocks > available_blocks:
             # Cannot allocate new blocks
             return None
 
+        # ===== 阶段 3: 处理前缀缓存命中的 blocks =====
         if (
             new_computed_block_list is not self.empty_kv_cache_blocks.blocks
             or num_external_computed_tokens > 0
@@ -432,6 +458,7 @@ class KVCacheManager:
                 num_external_computed_tokens=num_external_computed_tokens,
             )
 
+        # ===== 阶段 4: 分配新 blocks =====
         new_blocks = self.coordinator.allocate_new_blocks(
             request.request_id,
             num_tokens_need_slot,
@@ -441,6 +468,7 @@ class KVCacheManager:
 
         # P/D: delay caching blocks if we have to recv from
         # remote. Update state for locally cached blocks.
+        # ===== 阶段 5: 缓存已完成的 blocks =====
         if not self.enable_caching or delay_cache_blocks:
             return self.create_kv_cache_blocks(new_blocks)
 
@@ -449,6 +477,7 @@ class KVCacheManager:
         # "non-committable" tokens (e.g., draft tokens that could be rejected).
         # Therefore, we cap the number at `request.num_tokens`, ensuring only
         # "finalized" tokens are cached.
+        # 只缓存 "finalized" 的 tokens（排除 draft tokens）
         num_tokens_to_cache = min(
             total_computed_tokens + num_new_tokens,
             request.num_tokens,

@@ -18,14 +18,14 @@ logger = init_logger(__name__)
 class BlockTable:
     def __init__(
         self,
-        block_size: int,
-        max_num_reqs: int,
-        max_num_blocks_per_req: int,
-        max_num_batched_tokens: int,
-        pin_memory: bool,
-        device: torch.device,
-        kernel_block_size: int,
-        cp_kv_cache_interleave_size: int,
+        block_size: int,                                        # Block 大小 (tokens)
+        max_num_reqs: int,                                      # 最大并发请求数
+        max_num_blocks_per_req: int,                            # 每请求最大 Block 数
+        max_num_batched_tokens: int,                            # 最大 batch token 数
+        pin_memory: bool,                                       # 是否 pin memory
+        device: torch.device,                                   # 设备类型
+        kernel_block_size: int,                                 # kernel 使用的 block size
+        cp_kv_cache_interleave_size: int,                       # CP 交错大小
     ):
         """
         Args:
@@ -67,11 +67,16 @@ class BlockTable:
 
         self.max_num_blocks_per_req = max_num_blocks_per_req * self.blocks_per_kv_block
 
+        # 核心：block_table 存储逻辑 → 物理映射
+        # 维度: [max_num_reqs, max_num_blocks_per_req]
         self.block_table = self._make_buffer(
             self.max_num_reqs, self.max_num_blocks_per_req, dtype=torch.int32
         )
+        # 记录每行实际使用的 block 数量
         self.num_blocks_per_row = np.zeros(max_num_reqs, dtype=np.int32)
 
+        # slot_mapping: 将每个 token 映射到具体的物理 slot
+        # 用于 attention kernel 直接寻址
         self.slot_mapping = self._make_buffer(
             self.max_num_batched_tokens, dtype=torch.int64
         )
@@ -338,6 +343,7 @@ def _compute_slot_mapping_kernel(
     PAD_ID: tl.constexpr,
     BLOCK_SIZE: tl.constexpr,
 ):
+    # req_idx 代表当前线程处理的请求行
     req_idx = tl.program_id(0)
 
     if req_idx == tl.num_programs(0) - 1:
@@ -351,6 +357,7 @@ def _compute_slot_mapping_kernel(
             )
         return
 
+    # query_start_loc 给出每个请求在 positions 里的范围：
     start_idx = tl.load(query_start_loc_ptr + req_idx).to(tl.int64)
     end_idx = tl.load(query_start_loc_ptr + req_idx + 1).to(tl.int64)
 
@@ -360,12 +367,16 @@ def _compute_slot_mapping_kernel(
         offsets = i + tl.arange(0, BLOCK_SIZE)
         mask = offsets < end_idx
         pos = tl.load(positions_ptr + offsets, mask=mask, other=0)
+        # 1. 计算逻辑 block 编号
         block_indices = pos // virtual_block_size
+        # 2. 从 Block Table 查找物理 block 编号
         block_numbers = tl.load(block_table_ptr + row_offset + block_indices).to(
             tl.int64
         )
 
+        # 3. 计算 block 内偏移
         virtual_block_offsets = pos - block_indices * virtual_block_size
+        # 4. 处理 Context Parallelism 的数据分布
         is_local = (
             virtual_block_offsets // CP_KV_CACHE_INTERLEAVE_SIZE
         ) % TOTAL_CP_WORLD_SIZE == TOTAL_CP_RANK
@@ -375,6 +386,7 @@ def _compute_slot_mapping_kernel(
             virtual_block_offsets % CP_KV_CACHE_INTERLEAVE_SIZE
         )
 
+        # 5. 组合最终的物理 slot ID
         slot_ids = block_numbers * block_size + local_block_offsets
         slot_ids = tl.where(is_local, slot_ids, PAD_ID)
         tl.store(slot_mapping_ptr + offsets, slot_ids, mask=mask)

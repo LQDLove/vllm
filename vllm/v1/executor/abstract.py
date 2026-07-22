@@ -41,8 +41,8 @@ class Executor(ABC):
     or it can be a distributed executor that can execute the model on multiple devices.
     """
 
-    uses_ray: bool = False  # whether the executor uses Ray for orchestration.
-    supports_pp: bool = False  # whether the executor supports PP
+    uses_ray: bool = False  # whether the executor uses Ray for orchestration.# 是否使用 Ray
+    supports_pp: bool = False  # whether the executor supports PP# 是否支持流水线并行
 
     @staticmethod
     def get_class(vllm_config: VllmConfig) -> type["Executor"]:

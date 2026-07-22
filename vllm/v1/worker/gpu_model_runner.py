@@ -511,6 +511,7 @@ class GPUModelRunner(
             use_fp64_gumbel=self.model_config.use_fp64_gumbel,
         )
 
+
         self.eplb_state: EplbState | None = None
         self._moe_model: MixtureOfExperts | None = None
         # NOTE(yongji): flag to temporarily disable EPLB during scaling up/down

@@ -119,23 +119,23 @@ class KVCacheBlock:
     """KV-cache block metadata."""
 
     # Block ID, ranging from 0 to num_gpu_blocks - 1.
-    block_id: int
+    block_id: int                       # 块的唯一标识，对应 GPU 内存中的物理位置
     # Reference count.
-    ref_cnt: int = 0
+    ref_cnt: int = 0                # 引用计数，表示当前块被多少个请求使用
     # The hash key (block hash + group id) of the block, only available
     # when the block is full and cached.
-    _block_hash: BlockHashWithGroupId | None = None
+    _block_hash: BlockHashWithGroupId | None = None             # 用于前缀缓存的 hash 值，只有满块才有
     # Number of prefix tokens covered by _block_hash. For full blocks this is
     # the full block boundary; partial aliases can end inside a cache block.
     _block_hash_num_tokens: int | None = None
 
     # Used to construct a doubly linked list for free blocks.
     # These two attributes should only be manipulated by FreeKVCacheBlockQueue.
-    prev_free_block: "KVCacheBlock | None" = None
+    prev_free_block: "KVCacheBlock | None" = None               # 空闲队列的链表指针，实现 O(1) 的插入删除
     next_free_block: "KVCacheBlock | None" = None
 
     # Whether the block is a null block that should never be cached.
-    is_null: bool = False
+    is_null: bool = False                                           # 标记占位符块，用于填充 Block Table 中的空位
 
     @property
     def block_hash(self) -> BlockHashWithGroupId | None:

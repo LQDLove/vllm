@@ -354,25 +354,25 @@ class SamplingParams(
 
     @staticmethod
     def from_optional(
-        n: int | None = 1,
-        presence_penalty: float | None = 0.0,
-        frequency_penalty: float | None = 0.0,
-        repetition_penalty: float | None = 1.0,
-        temperature: float | None = 1.0,
-        top_p: float | None = 1.0,
-        top_k: int = 0,
-        min_p: float = 0.0,
-        seed: int | None = None,
-        stop: str | list[str] | None = None,
-        stop_token_ids: list[int] | None = None,
+        n: int | None = 1,                              # 每个 prompt 生成的序列数
+        presence_penalty: float | None = 0.0,           # 存在惩罚
+        frequency_penalty: float | None = 0.0,          # 频率惩罚
+        repetition_penalty: float | None = 1.0,         # 重复惩罚
+        temperature: float | None = 1.0,                # 采样温度
+        top_p: float | None = 1.0,                      # top-p (nucleus) 采样
+        top_k: int = 0,                                 # top-k 采样（-1 表示禁用）
+        min_p: float = 0.0,                             # min-p 采样
+        seed: int | None = None,                        # 随机种子
+        stop: str | list[str] | None = None,            # 停止字符串
+        stop_token_ids: list[int] | None = None,        # 停止 token
         bad_words: list[str] | None = None,
         thinking_token_budget: int | None = None,
         include_stop_str_in_output: bool = False,
         ignore_eos: bool = False,
-        max_tokens: int | None = 16,
+        max_tokens: int | None = 16,                    # 最大生成 token 数
         min_tokens: int = 0,
-        logprobs: int | None = None,
-        prompt_logprobs: int | None = None,
+        logprobs: int | None = None,                    # 返回的 logprobs 数量
+        prompt_logprobs: int | None = None,             
         detokenize: bool = True,
         skip_special_tokens: bool = True,
         spaces_between_special_tokens: bool = True,

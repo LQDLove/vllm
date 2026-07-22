@@ -103,7 +103,7 @@ class KVCacheSpec:
     """
 
     # number of tokens in a block
-    block_size: int
+    block_size: int     # 每个 block 包含的 token 数量（默认 16）
 
     @property
     def page_size_bytes(self) -> int:

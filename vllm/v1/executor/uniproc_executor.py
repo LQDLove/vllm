@@ -45,6 +45,8 @@ class AsyncOutputFuture(Future):
 class UniProcExecutor(Executor):
     def _init_executor(self) -> None:
         """Initialize the worker and load the model."""
+        """单进程 Executor, 用于单 GPU 场景"""
+        # 直接在当前进程创建 Worker
         self.driver_worker = WorkerWrapperBase(rpc_rank=0)
         distributed_init_method, rank, local_rank = self._distributed_args()
         kwargs = dict(

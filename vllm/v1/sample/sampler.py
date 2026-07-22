@@ -81,6 +81,7 @@ class Sampler(nn.Module):
         # temperature scaling) for the top-k logprobs.
         # This is different from the V0 sampler, which uses the logits that
         # is used for sampling (after penalties and temperature scaling).
+        # 1. 计算原始 logprobs（用于返回给用户）
         num_logprobs = sampling_metadata.max_num_logprobs
         raw_logprobs: torch.Tensor | None = None
         if num_logprobs is not None or sampling_metadata.logprob_token_ids:
@@ -93,12 +94,15 @@ class Sampler(nn.Module):
                     raw_logprobs = logits.to(torch.float32)
 
         # Use float32 for the logits.
+        # 2. 转换为 float32
         logits = logits.to(torch.float32)
 
+        # 3-6. 应用各种 logits 处理器
         logits = self.apply_logits_processors(
             logits, sampling_metadata, predict_bonus_token
         )
         # Sample the next token.
+        # 7. 采样
         sampled, processed_logprobs = self.sample(logits, sampling_metadata)
         if processed_logprobs is not None:
             raw_logprobs = processed_logprobs
@@ -126,6 +130,7 @@ class Sampler(nn.Module):
             )
         else:
             # Gather the logprobs and ranks of the topk and sampled token.
+            # 8. 收集 logprobs
             logprobs_tensors = self.gather_logprobs(
                 raw_logprobs, num_logprobs, token_ids=sampled
             )
@@ -139,6 +144,7 @@ class Sampler(nn.Module):
         sampled = sampled.to(torch.int32)
 
         # These are GPU tensors.
+        # 9. 返回结果
         sampler_output = SamplerOutput(
             # The sampled tokens are expanded to 2D tensor with shape
             # [num_requests, 1], where each row represents one generated
