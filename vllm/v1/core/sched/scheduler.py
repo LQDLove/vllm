@@ -77,6 +77,7 @@ class Scheduler(SchedulerInterface):
         include_finished_set: bool = False,
         log_stats: bool = False,
     ) -> None:
+        # 前置处理逻辑
         self.vllm_config = vllm_config
         self.scheduler_config = vllm_config.scheduler_config
         self.cache_config = vllm_config.cache_config
@@ -398,9 +399,10 @@ class Scheduler(SchedulerInterface):
         # chunked prefills, prefix caching, speculative decoding,
         # and the "jump decoding" optimization in the future.
 
-        scheduled_new_reqs: list[Request] = []
-        scheduled_resumed_reqs: list[Request] = []
-        scheduled_running_reqs: list[Request] = []
+        # 用于精确跟踪状态变化
+        scheduled_new_reqs: list[Request] = []                  # 存储从 waiting 调度到 running 的全新请求
+        scheduled_resumed_reqs: list[Request] = []              # 存储从 waiting 调度到 running 的曾被抢占的请求
+        scheduled_running_reqs: list[Request] = []              # 存储上一轮就在 running 且本轮依然保留的请求
         preempted_reqs: list[Request] = []
 
         req_to_new_blocks: dict[str, KVCacheBlocks] = {}
@@ -522,6 +524,7 @@ class Scheduler(SchedulerInterface):
                 continue
 
             # Schedule newly needed KV blocks for the request.
+            # 调度新的请求需要为请求分配资源
             with record_function_or_nullcontext("schedule: allocate_slots"):
                 while True:
                     new_blocks = self.kv_cache_manager.allocate_slots(
@@ -569,11 +572,13 @@ class Scheduler(SchedulerInterface):
                         # No more request to preempt. Cannot schedule this request.
                         break
 
+            # 资源不足，请求无法调度
             if new_blocks is None:
                 # Cannot schedule this request.
                 break
 
             # Schedule the request.
+            # 调度该请求
             scheduled_running_reqs.append(request)
             prefill_scheduled |= request.is_prefill_chunk
             request_id = request.request_id
@@ -626,11 +631,13 @@ class Scheduler(SchedulerInterface):
             assert len(scheduled_loras) <= self.lora_config.max_loras
 
         # Next, schedule the WAITING requests.
+        # preempted_reqs 为空意味着当前没有被抢占的请求，且调度器处于未暂停状态
         if not preempted_reqs and self._pause_state == PauseState.UNPAUSED:
             step_skipped_waiting = create_request_queue(self.policy)
 
             while (self.waiting or self.skipped_waiting) and token_budget > 0:
                 if len(self.running) == self.max_num_running_reqs:
+                    # 运行队列已满，无法调度更多请求
                     break
 
                 request_queue = self._select_waiting_queue_for_scheduling()
@@ -957,14 +964,17 @@ class Scheduler(SchedulerInterface):
                     self._inflight_prefills.add(request)
                     continue
 
+                # 请求加入到 running 队列中，等待下一轮调度
                 self.running.append(request)
                 if self.log_stats:
                     request.record_event(
                         EngineCoreEventType.SCHEDULED, scheduled_timestamp
                     )
                 if request.status == RequestStatus.WAITING:
+                    # 请求首次调度，加入到队列中
                     scheduled_new_reqs.append(request)
                 elif request.status == RequestStatus.PREEMPTED:
+                    # 被抢占请求要重新调度
                     scheduled_resumed_reqs.append(request)
                 else:
                     raise RuntimeError(f"Invalid request status: {request.status}")
