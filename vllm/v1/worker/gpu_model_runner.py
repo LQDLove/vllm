@@ -1,33 +1,56 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
+# 导入 functools,用于 cached_property、partial 等工具。
 import functools
+# 导入 gc,用于垃圾回收。
 import gc
+# 导入 itertools,用于迭代工具。
 import itertools
+# 导入 threading,用于线程相关操作。
 import threading
+# 导入 time,用于计时。
 import time
+# 导入 defaultdict,用于带默认值的字典。
 from collections import defaultdict
+# 导入抽象集合类型标注。
 from collections.abc import Callable, Iterable, Iterator, Sequence
+# 导入上下文管理器工具。
 from contextlib import AbstractContextManager, contextmanager, nullcontext
+# 导入拷贝与深拷贝。
 from copy import copy, deepcopy
+# 导入数据类工具。
 from dataclasses import dataclass, replace
+# 导入 reduce,用于归并迭代。
 from functools import reduce
+# 导入类型标注工具。
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeAlias, cast
 
+# 导入 numpy,用于 CPU 侧数组运算。
 import numpy as np
+# 导入 PyTorch,用于张量与 CUDA 操作。
 import torch
+# 导入 torch.distributed,用于分布式原语。
 import torch.distributed
+# 导入 nn 模块,用于模型类型。
 import torch.nn as nn
+# 导入 tqdm,用于进度条显示。
 from tqdm import tqdm
 
+# 导入环境变量配置。
 import vllm.envs as envs
+# 导入可打断 CUDA graph 包装与启用判断。
 from vllm.compilation.breakable_cudagraph import (
     BreakableCUDAGraphWrapper,
     is_breakable_cudagraph_enabled,
 )
+# 导入编译计数器。
 from vllm.compilation.counter import compilation_counter
+# 导入 CUDA graph 统计与包装器。
 from vllm.compilation.cuda_graph import CUDAGraphStat, CUDAGraphWrapper
+# 导入 CUDA graph 捕获开关设置。
 from vllm.compilation.monitor import set_cudagraph_capturing_enabled
+# 导入编译配置相关项。
 from vllm.config import (
     CompilationMode,
     CUDAGraphMode,
@@ -36,13 +59,21 @@ from vllm.config import (
     set_current_vllm_config,
     update_config,
 )
+# 导入缓存配置。
 from vllm.config.cache import CacheConfig
+# 导入编码器缓存管理器元数据。
 from vllm.config.ec_manager_config import EncoderCacheManagerMetadata
+# 导入已处理的 logprobs 模式常量。
 from vllm.config.model import PROCESSED_LOGPROBS_MODES
+# 导入 EC(嵌入缓存)传输工具。
 from vllm.distributed.ec_transfer import get_ec_transfer, has_ec_transfer
+# 导入 EPLB 状态。
 from vllm.distributed.eplb.eplb_state import EplbState
+# 导入 KV 传输工具。
 from vllm.distributed.kv_transfer import get_kv_transfer_group, has_kv_transfer_group
+# 导入 KV 块拷贝工具。
 from vllm.distributed.kv_transfer.kv_connector.utils import copy_kv_blocks
+# 导入并行状态工具(图捕获上下文、各并行组访问器等)。
 from vllm.distributed.parallel_state import (
     GraphCaptureContext,
     get_dcp_group,
@@ -51,31 +82,43 @@ from vllm.distributed.parallel_state import (
     graph_capture,
     is_global_first_rank,
 )
+# 导入前向上下文工具。
 from vllm.forward_context import (
     BatchDescriptor,
     set_forward_context,
 )
+# 导入日志初始化函数。
 from vllm.logger import init_logger
+# 导入 LoRA 层基类与映射类型。
 from vllm.lora.layers import BaseLayerWithLoRA, LoRAMapping, LoRAMappingType
+# 导入注意力层与 MLA 注意力。
 from vllm.model_executor.layers.attention import Attention, MLAAttention
+# 导入注意力层基类接口。
 from vllm.model_executor.layers.attention_layer_base import AttentionLayerBase
+# 导入 EP all2all 管理器访问器。
 from vllm.model_executor.layers.fused_moe.all2all_utils import get_ep_all2all_manager
+# 导入路由专家捕获器及绑定函数。
 from vllm.model_executor.layers.fused_moe.routed_experts_capturer import (
     RoutedExpertsCapturer,
     bind_routed_experts_capturer,
 )
+# 导入 Mamba SSU 后端初始化函数。
 from vllm.model_executor.layers.mamba.ops.ssu_dispatch import (
     initialize_mamba_ssu_backend,
 )
+# 导入旋转位置编码类(MRoPE 与 XDRoPE)。
 from vllm.model_executor.layers.rotary_embedding import (
     MRotaryEmbedding,
     XDRotaryEmbedding,
 )
+# 导入模型加载器工厂。
 from vllm.model_executor.model_loader import get_model_loader
+# 导入分层重载的初始化与收尾函数。
 from vllm.model_executor.model_loader.reload import (
     finalize_layerwise_reload,
     initialize_layerwise_reload,
 )
+# 导入模型接口(MoE、多模态、mRoPE/xdrope 等)。
 from vllm.model_executor.models.interfaces import (
     MixtureOfExperts,
     MultiModalEmbeddings,
@@ -90,40 +133,58 @@ from vllm.model_executor.models.interfaces import (
     supports_transcription,
     supports_xdrope,
 )
+# 导入基础模型接口(池化、生成判断)。
 from vllm.model_executor.models.interfaces_base import (
     VllmModelForPooling,
     is_pooling_model,
     is_text_generation_model,
 )
+# 导入层卸载器工具。
 from vllm.model_executor.offloader import (
     create_offloader,
     get_offloader,
     set_offloader,
 )
+# 导入多模态注册表。
 from vllm.multimodal import MULTIMODAL_REGISTRY
+# 导入多模态编码预算。
 from vllm.multimodal.encoder_budget import MultiModalBudget
+# 导入多模态输入结构。
 from vllm.multimodal.inputs import (
     BatchedTensorInputs,
     MultiModalKwargsItem,
     PlaceholderRange,
 )
+# 导入多模态工具(模态拷贝、窗口特征、批量 kwargs)。
 from vllm.multimodal.utils import (
     copy_mm_embedding_modality,
     get_mm_features_in_window,
     group_and_batch_mm_kwargs,
     set_mm_embedding_modality,
 )
+# 导入当前平台抽象。
 from vllm.platforms import current_platform
+# 导入池化参数。
 from vllm.pooling_params import PoolingParams
+# 导入采样类型枚举。
 from vllm.sampling_params import SamplingType
+# 导入中间张量容器。
 from vllm.sequence import IntermediateTensors
+# 导入任务类型枚举。
 from vllm.tasks import GenerationTask, PoolingTask, SupportedTask
+# 导入追踪装饰器。
 from vllm.tracing import instrument
+# 导入 prompt 长度计算工具。
 from vllm.utils import length_from_prompt_token_ids_or_embeds
+# 导入数学工具(向上整除与向上取整)。
 from vllm.utils.math_utils import cdiv, round_up
+# 导入显存工具(分析器与格式化)。
 from vllm.utils.mem_utils import DeviceMemoryProfiler, format_gib
+# 导入 PyTorch NVTX 钩子。
 from vllm.utils.nvtx_pytorch_hooks import PytHooks
+# 导入计算单元数量工具。
 from vllm.utils.platform_utils import num_compute_units
+# 导入 torch 工具(锁页、异步 H2D、流、量化 KV dtype 等)。
 from vllm.utils.torch_utils import (
     PIN_MEMORY,
     async_tensor_h2d,
@@ -131,6 +192,7 @@ from vllm.utils.torch_utils import (
     is_quantized_kv_cache,
     kv_cache_dtype_str_to_dtype,
 )
+# 导入注意力后端基础接口。
 from vllm.v1.attention.backend import (
     AttentionBackend,
     AttentionCGSupport,
@@ -139,19 +201,26 @@ from vllm.v1.attention.backend import (
     AttentionType,
     CommonAttentionMetadata,
 )
+# 导入 GDN 注意力元数据构建器。
 from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadataBuilder
+# 导入 Bailing 线性注意力元数据构建器。
 from vllm.v1.attention.backends.linear_attn import (
     BailingLinearAttentionMetadataBuilder,
 )
+# 导入 Mamba2 注意力元数据构建器。
 from vllm.v1.attention.backends.mamba2_attn import Mamba2AttentionMetadataBuilder
+# 导入注意力后端通用工具。
 from vllm.v1.attention.backends.utils import (
     NULL_BLOCK_ID,
     create_fast_prefill_custom_backend,
     get_dcp_local_seq_lens,
     reorder_batch_to_split_decodes_and_prefills,
 )
+# 导入调度器的新请求数据结构。
 from vllm.v1.core.sched.output import NewRequestData
+# 导入 CUDA graph 分发器。
 from vllm.v1.cudagraph_dispatcher import CudagraphDispatcher
+# 导入 KV cache 规格相关类型。
 from vllm.v1.kv_cache_interface import (
     AttentionSpec,
     ChunkedLocalAttentionSpec,
@@ -168,7 +237,9 @@ from vllm.v1.kv_cache_interface import (
     UniformTypeKVCacheSpecs,
     get_kv_cache_spec_kind,
 )
+# 导入 KV cache 规格注册表。
 from vllm.v1.kv_cache_spec_registry import KVCacheSpecRegistry
+# 导入输出相关结构。
 from vllm.v1.outputs import (
     EMPTY_MODEL_RUNNER_OUTPUT,
     AsyncModelRunnerOutput,
@@ -184,13 +255,21 @@ from vllm.v1.outputs import (
     SamplerOutput,
     make_empty_encoder_model_runner_output,
 )
+# 导入后期交互运行器(池化)。
 from vllm.v1.pool.late_interaction_runner import LateInteractionRunner
+# 导入池化元数据与状态。
 from vllm.v1.pool.metadata import PoolingMetadata, PoolingStates
+# 导入 logits 处理器工具。
 from vllm.v1.sample.logits_processor import LogitsProcessors, build_logitsprocs
+# 导入 logits 处理器接口。
 from vllm.v1.sample.logits_processor.interface import LogitsProcessor
+# 导入采样元数据。
 from vllm.v1.sample.metadata import SamplingMetadata
+# 导入拒绝采样器。
 from vllm.v1.sample.rejection_sampler import RejectionSampler
+# 导入采样器。
 from vllm.v1.sample.sampler import Sampler
+# 导入投机解码各类提案器。
 from vllm.v1.spec_decode.custom_class_proposer import create_custom_proposer
 from vllm.v1.spec_decode.dflash import DFlashProposer
 from vllm.v1.spec_decode.draft_model import DraftModelProposer
@@ -198,41 +277,62 @@ from vllm.v1.spec_decode.eagle import EagleProposer
 from vllm.v1.spec_decode.extract_hidden_states import ExtractHiddenStatesProposer
 from vllm.v1.spec_decode.gemma4 import Gemma4Proposer
 from vllm.v1.spec_decode.medusa import MedusaProposer
+# 导入投机解码元数据。
 from vllm.v1.spec_decode.metadata import SpecDecodeMetadata
+# 导入 GPU n-gram 提案器相关工具。
 from vllm.v1.spec_decode.ngram_proposer_gpu import (
     NgramProposerGPU,
     copy_num_valid_draft_tokens,
     update_ngram_gpu_tensors_incremental,
     update_scheduler_for_invalid_drafts,
 )
+# 导入 Step3p5 MTP 提案器。
 from vllm.v1.spec_decode.step3p5 import Step3p5MTPProposer
+# 导入后缀解码提案器。
 from vllm.v1.spec_decode.suffix_decoding import SuffixDecodingProposer
+# 导入批次变化时的 token 数更新工具。
 from vllm.v1.spec_decode.utils import update_num_computed_tokens_for_batch_change
+# 导入语法位掩码应用函数。
 from vllm.v1.structured_output.utils import apply_grammar_bitmask
+# 导入 CPU/GPU 双缓冲与函数记录上下文。
 from vllm.v1.utils import CpuGpuBuffer, record_function_or_nullcontext
+# 导入 mamba 工具模块。
 from vllm.v1.worker import mamba_utils
+# 导入 slot 映射模式枚举。
 from vllm.v1.worker.block_table import SlotMappingMode
+# 导入 CP 工具(兼容性检查、dummy 上下文长度与元数据)。
 from vllm.v1.worker.cp_utils import (
     check_attention_cp_compatibility,
     get_dcp_dummy_context_len,
     prepare_dcp_dummy_context_metadata,
 )
+# 导入 DP 批次协调工具。
 from vllm.v1.worker.dp_utils import coordinate_batch_across_dp
+# 导入 EC 连接器运行器混入类。
 from vllm.v1.worker.ec_connector_model_runner_mixin import ECConnectorModelRunnerMixin
+# 导入注意力 KV cache 重塑函数。
 from vllm.v1.worker.gpu.attn_utils import _reshape_attention_kv_cache
+# 导入 v1 输入批次与缓存请求状态。
 from vllm.v1.worker.gpu_input_batch import CachedRequestState, InputBatch
+# 导入微批次(ubatch)包装器。
 from vllm.v1.worker.gpu_ubatch_wrapper import UBatchWrapper
+# 导入 KV 连接器运行器混入类。
 from vllm.v1.worker.kv_connector_model_runner_mixin import KVConnectorModelRunnerMixin
+# 导入 LoRA 运行器混入类。
 from vllm.v1.worker.lora_model_runner_mixin import LoRAModelRunnerMixin
+# 导入微批次工具(切片、阈值检查、注意力元数据拆分)。
 from vllm.v1.worker.ubatch_utils import (
     UBatchSlices,
     check_ubatch_thresholds,
     maybe_create_ubatch_slices,
     split_attn_metadata,
 )
+# 导入 worker 工具(NaN 检查、SP 残差判断)。
 from vllm.v1.worker.utils import is_residual_scattered_for_sp, raise_if_nan_logits
+# 导入工作区锁定上下文。
 from vllm.v1.worker.workspace import lock_workspace
 
+# 导入同目录 worker 工具(注意力组、块清零、KV 共享等)。
 from .utils import (
     AttentionGroup,
     KVBlockZeroer,
@@ -243,97 +343,132 @@ from .utils import (
     sanity_check_mm_encoder_outputs,
 )
 
+# 仅类型检查时导入(避免循环依赖)。
 if TYPE_CHECKING:
     from vllm.v1.core.sched.output import GrammarOutput, SchedulerOutput
     from vllm.v1.spec_decode.ngram_proposer import NgramProposer
     from vllm.v1.worker.encoder_cudagraph import EncoderCudaGraphManager
 
+# 创建本模块的日志记录器。
 logger = init_logger(__name__)
 
 
 def _get_parameter_for_reload(model: nn.Module, name: str) -> nn.Parameter:
-    """Resolve checkpoint names without changing the model's module tree."""
+    """按检查点名称解析参数,不改变模型的模块树。"""
+    # 从右侧分割出模块名与参数名。
     module_name, _, parameter_name = name.rpartition(".")
+    # 获取子模块。
     module = model.get_submodule(module_name)
     if isinstance(module, BaseLayerWithLoRA):
+        # LoRA 层则取其基础层。
         module = module.base_layer
+    # 返回目标参数。
     return module.get_parameter(parameter_name)
 
 
+# 注意力元数据字典类型别名(层名 -> 元数据)。
 AttnMetadataDict: TypeAlias = dict[str, AttentionMetadata]
-# list when ubatching is enabled
+# 启用 ubatch 时为列表。
 PerLayerAttnMetadata: TypeAlias = list[AttnMetadataDict] | AttnMetadataDict
 
 
-# Wrapper for ModelRunnerOutput to support overlapped execution.
+# ModelRunnerOutput 的包装器,支持重叠执行。
 class AsyncGPUModelRunnerOutput(AsyncModelRunnerOutput):
     def __init__(
         self,
+        # 同步部分的模型运行器输出。
         model_runner_output: ModelRunnerOutput,
+        # 采样的 token ids 设备张量。
         sampled_token_ids: torch.Tensor,
+        # logprobs 张量(可选)。
         logprobs_tensors: LogprobsTensors | None,
+        # 无效请求索引列表。
         invalid_req_indices: list[int],
+        # 异步输出拷贝专用流。
         async_output_copy_stream: torch.cuda.Stream,
+        # 词表大小。
         vocab_size: int,
+        # 路由专家张量(可选)。
         routed_experts: RoutedExpertsTensors | None = None,
+        # 是否检查 EP 容错。
         check_ep_fault: bool = False,
     ):
+        # 保存同步部分输出。
         self._model_runner_output = model_runner_output
+        # 保存无效请求索引。
         self._invalid_req_indices = invalid_req_indices
 
-        # Event on the copy stream so we can synchronize the non-blocking copy.
-        # Blocking (sleep) event to avoid busy-polling the CUDA driver lock.
+        # 拷贝流上的事件,用于同步非阻塞拷贝。
+        # 阻塞(sleep)事件以避免忙轮询 CUDA 驱动锁。
         self.async_copy_ready_event = torch.cuda.Event(blocking=True)
 
-        # Keep a reference to the device tensor to avoid it being
-        # deallocated until we finish copying it to the host.
+        # 保留设备张量引用,避免在拷贝到主机完成前被释放。
         self._sampled_token_ids = sampled_token_ids
+        # 保存词表大小。
         self.vocab_size = vocab_size
+        # 保存 logprobs 张量。
         self._logprobs_tensors = logprobs_tensors
+        # 保存路由专家张量。
         self._routed_experts = routed_experts
+        # EP 故障标志张量默认 None。
         self._has_fault: torch.Tensor | None = None
 
-        # Initiate the copy on a separate stream, but do not synchronize it.
+        # 在独立流上启动拷贝,但不立即同步。
+        # 取默认流。
         default_stream = torch.cuda.current_stream()
+        # 切换到异步拷贝流。
         with torch.cuda.stream(async_output_copy_stream):
+            # 拷贝流等待默认流完成。
             async_output_copy_stream.wait_stream(default_stream)
+            # 非阻塞拷贝采样 token 到 CPU。
             self.sampled_token_ids_cpu = self._sampled_token_ids.to(
                 "cpu", non_blocking=True
             )
+            # 非阻塞拷贝 logprobs 到 CPU(若有)。
             self._logprobs_tensors_cpu = (
                 self._logprobs_tensors.to_cpu_nonblocking()
                 if self._logprobs_tensors
                 else None
             )
+            # 非阻塞拷贝路由专家到 CPU(若有)。
             self._routed_experts_cpu = (
                 self._routed_experts.to_cpu_nonblocking()
                 if self._routed_experts is not None
                 else None
             )
             if check_ep_fault:
+                # 查询 EP all2all 故障标志并拷到 CPU。
                 has_fault = get_ep_all2all_manager().query_fault()
                 self._has_fault = has_fault.to("cpu", non_blocking=True)
+            # 记录拷贝完成事件。
             self.async_copy_ready_event.record()
 
     def get_output(self) -> ModelRunnerOutput:
-        """Copy the device tensors to the host and return a ModelRunnerOutput.
+        """把设备张量拷到主机并返回 ModelRunnerOutput。
 
-        This function blocks until the copy is finished.
+        本函数会阻塞直到拷贝完成。
         """
+        # 取采样 token 的最大生成长度。
         max_gen_len = self.sampled_token_ids_cpu.shape[-1]
+        # 等待异步拷贝完成。
         self.async_copy_ready_event.synchronize()
 
-        # Release the device tensors once the copy has completed.
+        # 拷贝完成后释放设备张量。
         del self._logprobs_tensors
         del self._sampled_token_ids
         if max_gen_len == 1:
+            # 常规单 token 生成:直接转列表。
             valid_sampled_token_ids = self.sampled_token_ids_cpu.tolist()
             for i in self._invalid_req_indices:
+                # 清空无效请求的采样结果。
                 valid_sampled_token_ids[i].clear()
+            # logprobs 列表默认 None。
             logprobs_lists = None
             if self._logprobs_tensors_cpu is not None:
+                # 转换 logprobs 张量。
                 logprobs_lists = self._logprobs_tensors_cpu.tolists()
         else:
+            # 投机解码多 token:用拒绝采样器解析输出。
             valid_sampled_token_ids, logprobs_lists = RejectionSampler.parse_output(
                 self.sampled_token_ids_cpu,
                 self.vocab_size,
@@ -341,15 +476,21 @@ class AsyncGPUModelRunnerOutput(AsyncModelRunnerOutput):
                 logprobs_tensors=self._logprobs_tensors_cpu,
             )
 
+        # 取保存的输出对象并填充结果。
         output = self._model_runner_output
+        # 填入有效采样 token ids。
         output.sampled_token_ids = valid_sampled_token_ids
+        # 填入 logprobs。
         output.logprobs = logprobs_lists
 
         if self._routed_experts_cpu is not None:
+            # 填入路由专家列表。
             output.routed_experts = self._routed_experts_cpu.tolists()
+        # 释放设备端路由专家张量。
         del self._routed_experts
 
         if self._has_fault is not None and self._has_fault.item():
+            # 检测到 EP 通信故障则抛出异常。
             mask = get_ep_all2all_manager().query_active_mask()
             raise RuntimeError(
                 "Fault detected in EP all2all communication: "
@@ -357,239 +498,321 @@ class AsyncGPUModelRunnerOutput(AsyncModelRunnerOutput):
                 f"Mask: {mask.cpu().tolist()}"
             )
 
+        # 返回最终输出。
         return output
 
 
 def _copy_pooler_output_to_cpu(
     raw_pooler_output: PoolerOutput, finished_mask: list[bool]
 ) -> list[torch.Tensor | None]:
+    # 把池化输出按完成掩码拷贝到 CPU,仅保留已完成请求的结果。
+    # 取请求数。
     num_reqs = len(finished_mask)
 
     if isinstance(raw_pooler_output, torch.Tensor):
+        # 张量形式输出。
         if raw_pooler_output.shape[0] != num_reqs:
+            # 批大小与掩码不一致时报错。
             raise ValueError(
                 "Pooler output batch size does not match finished mask size: "
                 f"{raw_pooler_output.shape[0]} != {num_reqs}."
             )
 
+        # 统计已完成请求数。
         num_finished = sum(finished_mask)
         if num_finished == 0:
+            # 无完成请求,全部为 None。
             return [None] * num_reqs
         if num_finished == num_reqs:
+            # 全部完成:整批拷贝。
             return list(raw_pooler_output.to("cpu", non_blocking=True))
 
-        # partial finished
+        # 部分完成。
+        # 取完成请求的索引列表。
         finished_indices = [i for i, include in enumerate(finished_mask) if include]
+        # 构建索引张量。
         index_tensor = torch.tensor(
             finished_indices, device=raw_pooler_output.device, dtype=torch.long
         )
+        # 按索引选择并拷贝到 CPU。
         finished_outputs = raw_pooler_output.index_select(0, index_tensor).to(
             "cpu", non_blocking=True
         )
+        # 初始化部分输出列表。
         partial_pooler_output: list[torch.Tensor | None] = [None] * num_reqs
         for i, out in zip(finished_indices, finished_outputs):
+            # 填入完成请求的结果。
             partial_pooler_output[i] = out
+        # 返回部分结果。
         return partial_pooler_output
 
+    # 列表形式输出。
     assert isinstance(raw_pooler_output, list)
     if len(raw_pooler_output) != num_reqs:
+        # 长度不一致时报错。
         raise ValueError(
             "Pooler output batch size does not match finished mask size: "
             f"{len(raw_pooler_output)} != {num_reqs}."
         )
 
+    # 初始化结果列表。
     pooler_output: list[torch.Tensor | None] = [None] * num_reqs
     for i, (out, include) in enumerate(zip(raw_pooler_output, finished_mask)):
         if include and out is not None:
+            # 仅拷贝已完成且非空的条目。
             pooler_output[i] = out.to("cpu", non_blocking=True)
+    # 返回结果列表。
     return pooler_output
 
 
 class AsyncGPUPoolingModelRunnerOutput(AsyncModelRunnerOutput):
+    # 池化模型的异步输出包装器。
+
     def __init__(
         self,
+        # 同步部分输出。
         model_runner_output: ModelRunnerOutput,
+        # 原始池化输出(设备上)。
         raw_pooler_output: PoolerOutput,
+        # 完成掩码。
         finished_mask: list[bool],
+        # 异步拷贝流。
         async_output_copy_stream: torch.cuda.Stream,
     ):
+        # 保存同步部分输出。
         self._model_runner_output = model_runner_output
 
-        # Event on the copy stream so we can synchronize the non-blocking copy.
-        # Blocking (sleep) event to avoid busy-polling the CUDA driver lock.
+        # 拷贝流上的事件,用于同步非阻塞拷贝。
+        # 阻塞(sleep)事件以避免忙轮询 CUDA 驱动锁。
         self.async_copy_ready_event = torch.cuda.Event(blocking=True)
 
-        # Keep a reference to the device tensors to avoid them being
-        # deallocated until we finish copying it to the host.
+        # 保留设备张量引用,避免在拷贝到主机完成前被释放。
         self._raw_pooler_output = raw_pooler_output
 
-        # Initiate the copy on a separate stream, but do not synchronize it.
+        # 在独立流上启动拷贝,但不立即同步。
+        # 取默认流。
         default_stream = torch.cuda.current_stream()
+        # 切换到异步拷贝流。
         with torch.cuda.stream(async_output_copy_stream):
+            # 拷贝流等待默认流。
             async_output_copy_stream.wait_stream(default_stream)
+            # 按完成掩码拷贝池化输出到 CPU。
             self._model_runner_output.pooler_output = _copy_pooler_output_to_cpu(
                 raw_pooler_output=self._raw_pooler_output,
                 finished_mask=finished_mask,
             )
+            # 记录拷贝完成事件。
             self.async_copy_ready_event.record()
 
     def get_output(self) -> ModelRunnerOutput:
-        """Copy the device tensors to the host and return a ModelRunnerOutput.
-        This function blocks until the copy is finished.
+        """把设备张量拷到主机并返回 ModelRunnerOutput。
+        本函数会阻塞直到拷贝完成。
         """
+        # 等待异步拷贝完成。
         self.async_copy_ready_event.synchronize()
 
-        # Release the device tensors once the copy has completed.
+        # 拷贝完成后释放设备张量。
         del self._raw_pooler_output
+        # 返回最终输出。
         return self._model_runner_output
 
 
 class ExecuteModelState(NamedTuple):
-    """Ephemeral cached state transferred between execute_model() and
-    sample_tokens(), after execute_model() returns None."""
+    """execute_model() 返回 None 之后,在其与 sample_tokens() 之间
+    传递的临时缓存状态。"""
 
+    # 调度器输出。
     scheduler_output: "SchedulerOutput"
+    # logits 张量。
     logits: torch.Tensor
+    # 投机解码元数据。
     spec_decode_metadata: SpecDecodeMetadata | None
+    # 投机解码公共注意力元数据。
     spec_decode_common_attn_metadata: CommonAttentionMetadata | None
+    # 全部隐藏状态。
     hidden_states: torch.Tensor
+    # 采样用隐藏状态。
     sample_hidden_states: torch.Tensor
+    # 辅助隐藏状态列表。
     aux_hidden_states: list[torch.Tensor] | None
+    # EC 连接器输出。
     ec_connector_output: ECConnectorOutput | None
+    # CUDA graph 统计。
     cudagraph_stats: CUDAGraphStat | None
+    # slot 映射(启用 ubatch 时为列表)。
     slot_mappings: dict[str, torch.Tensor] | list[dict[str, torch.Tensor]] | None
 
 
 class GPUModelRunner(
     LoRAModelRunnerMixin, KVConnectorModelRunnerMixin, ECConnectorModelRunnerMixin
 ):
+    # GPU v1 模型运行器:混入 LoRA、KV 连接器与 EC 连接器能力。
+
     def __init__(
         self,
+        # vLLM 总配置。
         vllm_config: VllmConfig,
+        # 目标设备。
         device: torch.device,
     ):
+        # 保存总配置。
         self.vllm_config = vllm_config
+        # 保存模型配置。
         self.model_config = vllm_config.model_config
+        # 保存缓存配置。
         self.cache_config = vllm_config.cache_config
+        # 保存卸载配置。
         self.offload_config = vllm_config.offload_config
+        # 保存编译配置。
         self.compilation_config = vllm_config.compilation_config
+        # 保存 LoRA 配置。
         self.lora_config = vllm_config.lora_config
+        # 保存加载配置。
         self.load_config = vllm_config.load_config
+        # 保存并行配置。
         self.parallel_config = vllm_config.parallel_config
+        # 保存调度器配置。
         self.scheduler_config = vllm_config.scheduler_config
+        # 保存投机解码配置。
         self.speculative_config = vllm_config.speculative_config
+        # 保存可观测性配置。
         self.observability_config = vllm_config.observability_config
 
+        # 局部引用以便简写。
         model_config = self.model_config
         cache_config = self.cache_config
         scheduler_config = self.scheduler_config
         parallel_config = self.parallel_config
+        # 保存设备。
         self.device = device
+        # 模型数据类型。
         self.dtype = self.model_config.dtype
 
+        # EP 容错检查默认关闭。
         self.check_ep_fault = False
         if parallel_config.data_parallel_size > 1 and self.model_config.is_moe:
+            # MoE + DP 时查询后端容错能力。
             self.check_ep_fault = get_ep_all2all_manager().support_fault_tolerance
 
+        # 解析 KV cache 数据类型。
         self.kv_cache_dtype = kv_cache_dtype_str_to_dtype(
             cache_config.cache_dtype, self.model_config
         )
 
+        # 是否为池化模型。
         self.is_pooling_model = model_config.runner_type == "pooling"
+        # 是否启用 prompt embeds 输入。
         self.enable_prompt_embeds = model_config.enable_prompt_embeds
+        # 是否为仅接受多模态原始输入的模型。
         self.is_multimodal_raw_input_only_model = (
             model_config.is_multimodal_raw_input_only_model
         )
-        # These will be overridden in load_model()
+        # 以下两项将在 load_model() 中覆盖。
         self.is_multimodal_pruning_enabled = False
         self.requires_sequential_video_encoding = False
-        # Set to True after init_routed_experts_capturer() completes.
-        # Prevents routed experts code from running during profiling/dummy run.
+        # 在 init_routed_experts_capturer() 完成后置 True。
+        # 防止路由专家代码在 profiling/dummy 运行时执行。
         self.routed_experts_initialized = False
+        # 最大模型长度。
         self.max_model_len = model_config.max_model_len
 
-        # Always set to false after the first forward pass
+        # 首次前向后总是置 False。
+        # DCP 世界大小。
         self.dcp_world_size = self.parallel_config.decode_context_parallel_size
+        # DCP rank(未启用时为 0)。
         self.dcp_rank = 0 if self.dcp_world_size <= 1 else get_dcp_group().rank_in_group
+        # 单批最大 token 数。
         self.max_num_tokens = scheduler_config.max_num_batched_tokens
+        # 最大并发请求数。
         self.max_num_reqs = scheduler_config.max_num_seqs
 
-        # Broadcast PP output for external_launcher (torchrun)
-        # to make sure we are synced across pp ranks
-        # TODO: Support overlapping micro-batches
+        # 为 external_launcher(torchrun)广播 PP 输出,
+        # 以确保各 PP rank 同步。
+        # TODO: 支持微批次重叠
         # https://github.com/vllm-project/vllm/issues/18019
         self.broadcast_pp_output = (
             self.parallel_config.distributed_executor_backend == "external_launcher"
             and len(get_pp_group().ranks) > 1
         )
 
-        # Model-related.
+        # 模型相关。
+        # query 注意力头数。
         self.num_query_heads = model_config.get_num_attention_heads(parallel_config)
+        # 输入嵌入维度。
         self.inputs_embeds_size = model_config.get_inputs_embeds_size()
-        # Only relevant for models using ALiBi (e.g, MPT)
+        # 仅对使用 ALiBi 的模型(如 MPT)有意义。
         self.use_alibi = model_config.uses_alibi
 
+        # 是否启用级联注意力。
         self.cascade_attn_enabled = not self.model_config.disable_cascade_attn
+        # 是否为 mm prefix LM。
         self.is_mm_prefix_lm = self.model_config.is_mm_prefix_lm
 
-        # Multi-modal data support
+        # 多模态数据支持。
+        # 多模态注册表。
         self.mm_registry = MULTIMODAL_REGISTRY
+        # 是否使用 mrope。
         self.uses_mrope = model_config.uses_mrope
+        # xdrope 维度(0 表示不使用)。
         self.uses_xdrope_dim = model_config.uses_xdrope_dim
+        # 是否支持多模态输入。
         self.supports_mm_inputs = self.mm_registry.supports_multimodal_inputs(
             model_config
         )
 
         if self.model_config.is_encoder_decoder:
-            # Maximum length of the encoder input, only for encoder-decoder
-            # models.
+            # 编码器输入最大长度,仅 encoder-decoder 模型使用。
             self.max_encoder_len = scheduler_config.max_num_encoder_input_tokens
         else:
             self.max_encoder_len = 0
 
-        # Async scheduling
+        # 异步调度开关。
         self.use_async_scheduling = self.scheduler_config.async_scheduling
 
-        # Sampler
+        # 采样器。
         self.sampler = Sampler(
             logprobs_mode=self.model_config.logprobs_mode,
             use_fp64_gumbel=self.model_config.use_fp64_gumbel,
         )
 
+        # EPLB 状态(模型加载后惰性初始化)。
         self.eplb_state: EplbState | None = None
+        # MoE 模型接口缓存。
         self._moe_model: MixtureOfExperts | None = None
-        # NOTE(yongji): flag to temporarily disable EPLB during scaling up/down
+        # 注意(yongji): 扩容/缩容期间临时禁用 EPLB 的标志。
         self.eep_eplb_suppressed = False
         """
-        State of the expert parallelism load balancer.
+        专家并行负载均衡器的状态。
 
-        Will be lazily initialized when the model is loaded.
+        模型加载后惰性初始化。
         """
 
-        # Lazy initializations
-        # self.model: nn.Module  # Set after load_model
-        # Initialize in initialize_kv_cache
+        # 惰性初始化项。
+        # self.model: nn.Module  # load_model 后设置
+        # 在 initialize_kv_cache 中初始化。
         self.kv_caches: list[torch.Tensor] = []
-        # Initialize in initialize_kv_cache_tensors
+        # 在 initialize_kv_cache_tensors 中初始化。
         self.cross_layers_kv_cache: torch.Tensor | None = None
         self.cross_layers_attn_backend: type[AttentionBackend] | None = None
-        # indexes: [kv_cache_group_id][attn_group]
+        # 索引: [kv_cache_group_id][attn_group]
         self.attn_groups: list[list[AttentionGroup]] = []
         # self.kv_cache_config: KVCacheConfig
 
-        # mm_hash ->  encoder_output
+        # mm_hash -> 编码器输出。
         self.encoder_cache: dict[str, torch.Tensor] = {}
+        # 后期交互运行器。
         self.late_interaction_runner = LateInteractionRunner()
 
-        # Encoder CUDA graph manager (initialized after model load if enabled)
+        # 编码器 CUDA graph 管理器(模型加载后如启用则初始化)。
         self.encoder_cudagraph_manager: EncoderCudaGraphManager | None = None
 
+        # 是否使用辅助隐藏状态输出。
         self.use_aux_hidden_state_outputs = False
-        # Set up speculative decoding.
-        # NOTE(Jiayi): currently we put the entire draft model on
-        # the last PP rank. This is not ideal if there are many
-        # layers in the draft model.
+        # 设置投机解码。
+        # 注意(Jiayi): 目前把整个草稿模型放在最后一个 PP rank 上。
+        # 若草稿模型层数很多,这并不理想。
         if self.speculative_config and get_pp_group().is_last_rank:
+            # 草稿提案器类型联合。
             self.drafter: (
                 NgramProposer  # noqa: F823
                 | NgramProposerGPU
@@ -603,117 +826,147 @@ class GPUModelRunner(
                 | Step3p5MTPProposer
             )
             if self.speculative_config.method == "custom_class":
+                # 自定义提案器类。
                 self.drafter = create_custom_proposer(  # type: ignore[assignment]
                     self.vllm_config
                 )
             elif self.speculative_config.method == "ngram":
+                # CPU n-gram 提案器(局部导入避免循环依赖)。
                 from vllm.v1.spec_decode.ngram_proposer import NgramProposer
 
                 self.drafter = NgramProposer(self.vllm_config)
             elif self.speculative_config.uses_draft_model():
+                # 草稿模型提案器(EAGLE 等)。
                 self.drafter = DraftModelProposer(
                     vllm_config=self.vllm_config,
                     device=self.device,
                     runner=self,
                 )
             elif self.speculative_config.use_ngram_gpu():
+                # GPU n-gram 提案器。
                 self.drafter = NgramProposerGPU(self.vllm_config, self.device, self)
+                # GPU 上记录不含投机 token 的数量。
                 self.num_tokens_no_spec_gpu = torch.zeros(
                     self.max_num_reqs, dtype=torch.int32, device=device
                 )
+                # GPU 上的 token ids 缓冲。
                 self.token_ids_gpu_tensor = torch.zeros(
                     self.max_num_reqs,
                     self.max_model_len,
                     dtype=torch.int32,
                     device=device,
                 )
+                # 锁页索引缓冲(n-gram 用)。
                 self._ngram_pinned_idx_buf = torch.zeros(
                     self.max_num_reqs, dtype=torch.long, pin_memory=True
                 )
+                # 锁页值缓冲(n-gram 用)。
                 self._ngram_pinned_val_buf = torch.zeros(
                     self.max_num_reqs, dtype=torch.int32, pin_memory=True
                 )
             elif self.speculative_config.use_gemma4_mtp():
+                # Gemma4 MTP 提案器。
                 self.drafter = Gemma4Proposer(self.vllm_config, self.device, self)
             elif self.speculative_config.use_step3p5_mtp():
+                # Step3p5 MTP 提案器。
                 self.drafter = Step3p5MTPProposer(self.vllm_config, self.device, self)
             elif self.speculative_config.use_dflash():
+                # DFlash 提案器(需要辅助隐藏状态)。
                 self.drafter = DFlashProposer(self.vllm_config, self.device, self)
                 self.use_aux_hidden_state_outputs = True
             elif self.speculative_config.method == "suffix":
+                # 后缀解码提案器。
                 self.drafter = SuffixDecodingProposer(self.vllm_config)
             elif self.speculative_config.use_eagle():
+                # EAGLE 提案器。
                 self.drafter = EagleProposer(self.vllm_config, self.device, self)
                 if self.speculative_config.method == "eagle3":
+                    # eagle3 视配置决定是否使用辅助隐藏状态。
                     self.use_aux_hidden_state_outputs = (
                         self.drafter.eagle3_use_aux_hidden_state
                     )
             elif self.speculative_config.method == "medusa":
+                # Medusa 提案器。
                 self.drafter = MedusaProposer(
                     vllm_config=self.vllm_config, device=self.device
                 )
             elif self.speculative_config.method == "extract_hidden_states":
+                # 隐藏状态提取提案器(需要辅助隐藏状态)。
                 self.drafter = ExtractHiddenStatesProposer(
                     vllm_config=self.vllm_config, device=self.device
                 )
                 self.use_aux_hidden_state_outputs = True
             else:
+                # 未知的投机解码方法。
                 raise ValueError(
                     "Unknown speculative decoding method: "
                     f"{self.speculative_config.method}"
                 )
+            # 创建拒绝采样器。
             self.rejection_sampler = RejectionSampler(
                 self.sampler, self.speculative_config, self.device
             )
 
+        # 投机 token 数默认 0。
         self.num_spec_tokens = 0
+        # 上一步的投机 token 数。
         self.prev_num_spec_tokens = 0
+        # GPU 上的有效采样 token 计数。
         self.valid_sampled_token_count_gpu: torch.Tensor | None = None
         if self.speculative_config:
+            # 记录投机 token 数。
             self.num_spec_tokens = self.speculative_config.num_speculative_tokens
             self.prev_num_spec_tokens = self.num_spec_tokens
+            # 取草稿模型配置。
             draft_config = self.speculative_config.draft_model_config
             if draft_config is not None and draft_config.max_model_len is not None:
+                # 草稿模型的最大长度。
                 self.effective_drafter_max_model_len = draft_config.max_model_len
             else:
+                # 无草稿配置时与主模型相同。
                 self.effective_drafter_max_model_len = self.max_model_len
+        # 异步调度 + 投机解码同时启用时为 True。
         self.use_async_spec_decode = (
             self.use_async_scheduling and self.num_spec_tokens > 0
         )
 
-        # Request states.
+        # 请求状态。
+        # req_id -> 缓存请求状态映射。
         self.requests: dict[str, CachedRequestState] = {}
-        # NOTE(rob): num_prompt_logprobs only includes reqs
-        # that are currently in the prefill phase.
+        # 注意(rob): num_prompt_logprobs 只包含当前处于 prefill 阶段的请求。
         self.num_prompt_logprobs: dict[str, int] = {}
 
-        # Input Batch
-        # NOTE(Chen): Ideally, we should initialize the input batch inside
-        # `initialize_kv_cache` based on the kv cache config. However, as in
-        # https://github.com/vllm-project/vllm/pull/18298, due to some unknown
-        # reasons, we have to initialize the input batch before `load_model`,
-        # quantization + weight offloading will fail otherwise. As a temporary
-        # solution, we initialize the input batch here, and re-initialize it
-        # in `initialize_kv_cache` if the block_sizes here is different from
-        # the block_sizes in the kv cache config.
+        # 输入批次。
+        # 注意(Chen): 理想情况下应根据 kv cache 配置在 initialize_kv_cache
+        # 中初始化输入批次。但如同 https://github.com/vllm-project/vllm/pull/18298,
+        # 由于某些未知原因,必须在 load_model 之前初始化输入批次,
+        # 否则量化 + 权重卸载会失败。作为临时方案,先在此初始化,
+        # 并在 initialize_kv_cache 中当此处的 block_sizes 与 kv cache
+        # 配置不同时重新初始化。
+        # 取模型配置中的 logits 处理器。
         logits_processors = model_config.logits_processors
+        # 自定义 logits 处理器序列。
         custom_logitsprocs: Sequence[str | type[LogitsProcessor]] = (
             tuple(logits_processors) if logits_processors is not None else ()
         )
+        # 占位块大小(初始化时 KV 配置未知)。
         placeholder_block_size = (
             self.cache_config.block_size or CacheConfig.DEFAULT_BLOCK_SIZE
         )
+        # 占位最大块数。
         placeholder_max_num_blocks = cdiv(
             max(self.max_model_len, self.max_encoder_len), placeholder_block_size
         )
+        # 记录初始化块大小(供 initialize_kv_cache 重建时比较)。
         self._init_block_sizes = [placeholder_block_size]
         self._init_kernel_block_sizes = [placeholder_block_size]
         self._init_max_num_blocks = [placeholder_max_num_blocks]
         self._init_slot_mapping_modes = [SlotMappingMode.TOKEN_TO_KV_SLOT]
+        # 创建输入批次。
         self.input_batch = InputBatch(
             max_num_reqs=self.max_num_reqs,
-            # We need to use the encoder length for encoder-decoder
-            # because of KV cache for cross-attention.
+            # encoder-decoder 需使用编码器长度,
+            # 因为交叉注意力也有 KV cache。
             max_model_len=max(self.max_model_len, self.max_encoder_len),
             max_num_batched_tokens=self.max_num_tokens,
             device=self.device,
@@ -729,9 +982,8 @@ class GPUModelRunner(
                 self.is_pooling_model,
                 custom_logitsprocs,
             ),
-            # We currently don't know whether a particular custom logits processor
-            # uses output token ids so we set this conservatively. Thinking-budget
-            # tracking is requested dynamically when a budgeted request is in the batch.
+            # 目前无法得知某个自定义 logits 处理器是否使用输出 token ids,
+            # 因此保守设置。思考预算跟踪在有预算请求入批时动态请求。
             logitsprocs_need_output_token_ids=bool(custom_logitsprocs),
             is_pooling_model=self.is_pooling_model,
             cp_kv_cache_interleave_size=self.parallel_config.cp_kv_cache_interleave_size,
@@ -739,156 +991,182 @@ class GPUModelRunner(
             use_replayssm=self.cache_config.use_replayssm,
         )
 
-        # Separate cuda stream for overlapping transfer of sampled token ids from
-        # GPU to CPU when async scheduling is enabled.
+        # 异步调度启用时,用于采样 token 从 GPU 到 CPU 重叠传输的
+        # 独立 CUDA 流。
         self.async_output_copy_stream: torch.cuda.Stream | None = None
-        # cuda event to synchronize use of reused CPU tensors between steps
-        # when async scheduling is enabled.
+        # 异步调度启用时,用于同步跨步骤复用的 CPU 张量。
         self.prepare_inputs_event: torch.Event | None = None
         if self.use_async_scheduling:
+            # 创建异步拷贝流。
             self.async_output_copy_stream = torch.cuda.Stream()
-            # Blocking (sleep) event to avoid busy-polling the CUDA driver lock;
-            # under TP contention that spin can balloon and make the rank a straggler.
+            # 阻塞(sleep)事件以避免忙轮询 CUDA 驱动锁;
+            # TP 争用时自旋会膨胀并使该 rank 掉队。
             self.prepare_inputs_event = torch.cuda.Event(blocking=True)
 
-        # self.cudagraph_batch_sizes sorts in ascending order.
+        # self.cudagraph_batch_sizes 按升序排序。
         if (
             self.compilation_config.cudagraph_capture_sizes
             and self.compilation_config.cudagraph_mode != CUDAGraphMode.NONE
         ):
+            # 取配置的捕获尺寸并排序。
             self.cudagraph_batch_sizes = sorted(
                 self.compilation_config.cudagraph_capture_sizes
             )
         else:
+            # 禁用时为空列表。
             self.cudagraph_batch_sizes = []
 
-        # Cache the device properties.
+        # 缓存设备属性。
         self._init_device_properties()
 
-        # Encoder timing registry for observability
+        # 可观测性用的编码器计时注册表。
         self.encoder_timing_registry: dict[str, EncoderTimingStats] = {}
+        # 编码器计时的线程锁。
         self._encoder_timing_lock = threading.Lock()
 
-        # Persistent buffers for CUDA graphs.
+        # CUDA graph 的持久缓冲区。
+        # 输入 token ids 缓冲。
         self.input_ids = self._make_buffer(self.max_num_tokens, dtype=torch.int32)
+        # 位置缓冲。
         self.positions = torch.zeros(
             self.max_num_tokens, dtype=torch.int64, device=self.device
         )
+        # query 起点前缀和缓冲。
         self.query_start_loc = self._make_buffer(
             self.max_num_reqs + 1, dtype=torch.int32
         )
+        # 序列长度缓冲。
         self.seq_lens = torch.zeros(
             self.max_num_reqs, dtype=torch.int32, device=self.device
         )
+        # 乐观序列长度的 CPU 锁页缓冲。
         self.optimistic_seq_lens_cpu = torch.zeros(
             self.max_num_reqs, dtype=torch.int32, pin_memory=PIN_MEMORY
         )
+        # 已计算 token 数缓冲。
         self.num_computed_tokens = torch.zeros(
             self.max_num_reqs, dtype=torch.int32, device=self.device
         )
+        # 上一步草稿 token 数缓冲。
         self.prev_num_draft_tokens = self._make_buffer(
             self.max_num_reqs, dtype=torch.int32
         )
+        # token -> 请求索引映射缓冲。
         self.req_indices = self._make_buffer(self.max_num_tokens, dtype=torch.int64)
-        # Maps current batch position -> previous batch position (-1 for new reqs)
+        # 映射当前批次位置 -> 上一批次位置(新请求为 -1)。
         self.prev_positions = self._make_buffer(self.max_num_reqs, dtype=torch.int64)
+        # 调度 token 数缓冲。
         self.num_scheduled_tokens = self._make_buffer(
             self.max_num_reqs, dtype=torch.int32
         )
 
+        # 编码器序列长度缓冲。
         self.encoder_seq_lens = self._make_buffer(self.max_num_reqs, dtype=torch.int32)
         if self.dcp_world_size > 1:
+            # DCP 启用时准备本地序列长度缓冲。
             self.dcp_local_seq_lens = self._make_buffer(
                 self.max_num_reqs, dtype=torch.int32
             )
-        # Because inputs_embeds may be bfloat16 and we don't need a numpy
-        # version of this tensor, avoid a RuntimeError by not creating a
-        # numpy buffer.
+        # 由于 inputs_embeds 可能是 bfloat16 且无需 numpy 版本,
+        # 不创建 numpy 缓冲以避免 RuntimeError。
         self.inputs_embeds = self._make_buffer(
             self.max_num_tokens, self.inputs_embeds_size, dtype=self.dtype, numpy=False
         )
+        # token id 标记缓冲。
         self.is_token_ids = self._make_buffer(self.max_num_tokens, dtype=torch.bool)
+        # 丢弃请求掩码缓冲。
         self.discard_request_mask = self._make_buffer(
             self.max_num_reqs, dtype=torch.bool
         )
+        # 解码草稿 token 数缓冲。
         self.num_decode_draft_tokens = self._make_buffer(
             self.max_num_reqs, dtype=torch.int32
         )
+        # 接受 token 数缓冲。
         self.num_accepted_tokens = self._make_buffer(
             self.max_num_reqs, dtype=torch.int32
         )
 
-        # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
+        # 仅对使用 M-RoPE 的模型(如 Qwen2-VL)有意义。
         if self.uses_mrope:
-            # NOTE: `mrope_positions` is implemented with one additional dummy
-            # position on purpose to make it non-contiguous so that it can work
-            # with torch compile.
-            # See detailed explanation in https://github.com/vllm-project/vllm/pull/12128#discussion_r1926431923
+            # 注意: mrope_positions 特意多加一个 dummy 位置使其非连续,
+            # 以便与 torch.compile 配合。
+            # 详细解释见 https://github.com/vllm-project/vllm/pull/12128#discussion_r1926431923
 
-            # NOTE: When M-RoPE is enabled, position ids are 3D regardless of
-            # the modality of inputs. For text-only inputs, each dimension has
-            # identical position IDs, making M-RoPE functionally equivalent to
-            # 1D-RoPE.
-            # See page 5 of https://arxiv.org/abs/2409.12191
+            # 注意: 启用 M-RoPE 时,无论输入模态如何位置 id 都是 3D。
+            # 对纯文本输入,各维位置 id 相同,使 M-RoPE 功能等价于 1D-RoPE。
+            # 见 https://arxiv.org/abs/2409.12191 第 5 页
             self.mrope_positions = self._make_buffer(
                 (3, self.max_num_tokens + 1), dtype=torch.int64
             )
 
-        # Only relevant for models using XD-RoPE (e.g, HunYuan-VL)
+        # 仅对使用 XD-RoPE 的模型(如 HunYuan-VL)有意义。
         if self.uses_xdrope_dim > 0:
-            # Similar to mrope but use assigned dimension number for RoPE, 4 as default.
+            # 类似 mrope,但使用指定维数(默认 4)。
             self.xdrope_positions = self._make_buffer(
                 (self.uses_xdrope_dim, self.max_num_tokens + 1), dtype=torch.int64
             )
 
-        # None in the first PP rank. The rest are set after load_model.
+        # 首个 PP rank 为 None;其余在 load_model 后设置。
         self.intermediate_tensors: IntermediateTensors | None = None
 
-        # OPTIMIZATION: Cache the arange tensors rather than creating them
-        # every step. Keep in int64 to avoid overflow with long context.
-        # - arange_np: immutable [0, 1, 2, ...] used as source for batched computation
-        # - query_pos: CpuGpuBuffer for the computed batched arange result
+        # 优化: 缓存 arange 张量而非每步重建。
+        # 保持 int64 以避免长上下文溢出。
+        # - arange_np: 不可变的 [0, 1, 2, ...] 作为批量计算源
+        # - query_pos: 存放计算出的批量 arange 结果的 CpuGpuBuffer
+        # 缓冲大小取两者较大值。
         arange_size = max(self.max_num_reqs + 1, self.max_num_tokens)
+        # 创建 arange numpy 数组。
         self.arange_np = np.arange(arange_size, dtype=np.int64)
+        # 创建 query 位置缓冲。
         self.query_pos = self._make_buffer(arange_size, dtype=torch.int64)
+        # arange 计算的临时数组。
         self._arange_scratch = np.empty(arange_size, dtype=np.int64)
 
-        # Layer pairings for cross-layer KV sharing.
-        # If an Attention layer `layer_name` is in the keys of this dict, it
-        # means this layer will perform attention using the keys and values
-        # from the KV cache of `shared_kv_cache_layers[layer_name]`.
+        # 跨层 KV 共享的层配对。
+        # 若注意力层 `layer_name` 是此字典的键,表示该层将使用
+        # `shared_kv_cache_layers[layer_name]` 的 KV cache 做注意力。
         self.shared_kv_cache_layers: dict[str, str] = {}
+        # 可用快速 prefill 的 KV 共享层集合。
         self.kv_sharing_fast_prefill_eligible_layers: set[str] = set()
 
+        # 快速 prefill 的 logits 索引默认 None。
         self.kv_sharing_fast_prefill_logits_indices = None
         if self.cache_config.kv_sharing_fast_prefill:
+            # 启用时分配索引缓冲。
             self.kv_sharing_fast_prefill_logits_indices = torch.zeros(
                 self.max_num_tokens, dtype=torch.int32, device=self.device
             )
 
+        # 均匀解码的 query 长度 = 1 + 投机 token 数。
         self.uniform_decode_query_len = 1 + self.num_spec_tokens
 
-        # Cudagraph dispatcher for runtime cudagraph dispatching.
+        # 用于运行时 CUDA graph 分发的分发器。
         self.cudagraph_dispatcher = CudagraphDispatcher(self.vllm_config)
 
+        # 多模态编码预算(支持 mm 输入时创建)。
         self.mm_budget = (
             MultiModalBudget(self.vllm_config, self.mm_registry)
             if self.supports_mm_inputs
             else None
         )
 
+        # 批次重排阈值默认 None。
         self.reorder_batch_threshold: int | None = None
 
-        # Attention layers that are only in the KVCacheConfig of the runner
-        # (e.g., KV sharing, encoder-only attention), but not in the
-        # KVCacheConfig of the scheduler.
+        # 仅存在于本运行器 KVCacheConfig 中的注意力层
+        # (如 KV 共享、encoder-only 注意力),
+        # 而不在调度器的 KVCacheConfig 中。
         self.runner_only_attn_layers: set[str] = set()
 
-        # Cached outputs.
+        # 缓存的草稿输出。
+        # 草稿 token ids。
         self._draft_token_ids: list[list[int]] | torch.Tensor | None = None
+        # 草稿概率。
         self._draft_probs: torch.Tensor | None = None
+        # 草稿概率对应的请求 id 列表。
         self._draft_prob_req_ids: list[str] | None = None
-        # N-gram GPU path: async D2H buffer/event for per-request valid draft counts.
+        # N-gram GPU 路径: 每请求有效草稿数的异步 D2H 缓冲/事件。
         self._num_valid_draft_tokens: torch.Tensor | None = None
         self._num_valid_draft_tokens_cpu: torch.Tensor | None = None
         self._num_valid_draft_tokens_event: torch.cuda.Event | None = None
@@ -897,14 +1175,18 @@ class GPUModelRunner(
             self.speculative_config is not None
             and self.speculative_config.use_ngram_gpu()
         ):
+            # GPU n-gram 时创建锁页 CPU 缓冲、事件与拷贝流。
             self._num_valid_draft_tokens_cpu = torch.empty(
                 self.max_num_reqs, dtype=torch.int32, pin_memory=PIN_MEMORY
             )
             self._num_valid_draft_tokens_event = torch.cuda.Event()
             self._num_valid_draft_tokens_copy_stream = torch.cuda.Stream()
 
+        # 草稿 token 对应的请求 id 列表。
         self._draft_token_req_ids: list[str] | None = None
+        # 传输事件。
         self.transfer_event = torch.Event()
+        # 采样 token 的锁页 CPU 缓冲。
         self.sampled_token_ids_pinned_cpu = torch.empty(
             (self.max_num_reqs, 1),
             dtype=torch.int64,
@@ -912,18 +1194,18 @@ class GPUModelRunner(
             pin_memory=PIN_MEMORY,
         )
 
-        # Pre-allocated tensor for copying valid sampled token counts to CPU,
-        # with dedicated stream for overlapping and event for coordination.
+        # 预分配的"有效采样 token 计数"拷贝 CPU 张量,
+        # 带专用流做重叠、事件做协调。
         self.valid_sampled_token_count_event: torch.Event | None = None
         self.valid_sampled_token_count_copy_stream: torch.cuda.Stream | None = None
-        # We also copy the drafted tokens to the CPU asynchronously,
-        # in case we need them for structured outputs.
+        # 草稿 token 也会异步拷贝到 CPU,以备结构化输出需要。
         self.draft_token_ids_event: torch.Event | None = None
         self.draft_token_ids_copy_stream: torch.cuda.Stream | None = None
         self.valid_sampled_token_count_cpu: torch.Tensor | None = None
         self.draft_token_ids_cpu: torch.Tensor | None = None
         self.num_accepted_tokens_event: torch.Event | None = None
         if self.num_spec_tokens:
+            # 启用投机解码时创建相关事件、流与 CPU 缓冲。
             self.draft_token_ids_event = torch.Event()
             self.num_accepted_tokens_event = torch.Event()
             self.draft_token_ids_copy_stream = torch.cuda.Stream()
@@ -934,6 +1216,7 @@ class GPUModelRunner(
                 pin_memory=PIN_MEMORY,
             )
             if self.use_async_scheduling:
+                # 异步调度时为有效采样计数创建事件、流与缓冲。
                 self.valid_sampled_token_count_event = torch.Event()
                 self.valid_sampled_token_count_copy_stream = torch.cuda.Stream()
                 self.valid_sampled_token_count_cpu = torch.empty(
@@ -943,109 +1226,136 @@ class GPUModelRunner(
                     pin_memory=PIN_MEMORY,
                 )
 
-        # Model weight offloader
-        # Make sure this is called before any get_offloader call
+        # 模型权重卸载器。
+        # 确保在任何 get_offloader 调用之前执行。
         set_offloader(create_offloader(self.offload_config))
 
-        # Ephemeral state transferred between execute_model() and sample_tokens().
+        # execute_model() 与 sample_tokens() 之间传递的临时状态。
         self.execute_model_state: ExecuteModelState | None = None
+        # KV 连接器输出。
         self.kv_connector_output: KVConnectorOutput | None = None
+        # Mamba 状态索引映射。
         self.mamba_state_idx: dict[str, int] = {}
+        # Mamba 缓冲区(惰性创建)。
         self._mamba_bufs: mamba_utils.MambaBuffers | None = None
+        # 上一步最后调度的 Mamba 索引缓冲。
         self.mamba_prev_last_scheduled_idx: CpuGpuBuffer | None = None
         if self.cache_config.mamba_cache_mode == "all" and self.num_spec_tokens > 0:
+            # "all" 模式 + 投机解码时创建。
             self.mamba_prev_last_scheduled_idx = self._make_buffer(
                 self.max_num_reqs, dtype=torch.int32
             )
+        # 分层 NVTX 钩子注册标志。
         self.layerwise_nvtx_hooks_registered = False
 
     def update_max_model_len(self, max_model_len: int) -> None:
+        # 更新最大模型长度(profile 时可能调整)。
         self.max_model_len = max_model_len
         if self.speculative_config:
+            # 取草稿模型配置。
             draft_config = self.speculative_config.draft_model_config
             if draft_config is None or draft_config.max_model_len is None:
+                # 草稿无独立长度限制时与主模型同步。
                 self.effective_drafter_max_model_len = self.max_model_len
 
     def reset_mm_cache(self) -> None:
         """
-        Clear the multi-modal cache that was used during profiling,
-        but no longer needed during inference.
+        清理 profiling 期间使用、推理阶段不再需要的多模态缓存。
         """
         if self.mm_budget:
+            # 重置多模态预算缓存。
             self.mm_budget.reset_cache()
+        # 清空后期交互运行器。
         self.late_interaction_runner.clear()
 
     def reset_encoder_cache(self) -> None:
-        """Clear the GPU-side encoder cache storing vision embeddings.
+        """清空存放视觉嵌入的 GPU 侧编码器缓存。
 
-        This should be called when model weights are updated to ensure
-        stale embeddings computed with old weights are not reused.
+        更新模型权重时应调用,以确保不会复用旧权重算出的过期嵌入。
         """
+        # 清空编码器缓存字典。
         self.encoder_cache.clear()
+        # 清空后期交互运行器。
         self.late_interaction_runner.clear()
 
     def post_kv_cache_wake_up(self) -> None:
+        # KV cache 从休眠唤醒后的处理。
         self.init_fp8_kv_scales()
 
     @torch.inference_mode()
     def init_fp8_kv_scales(self) -> None:
         """
-        Re-initialize the KV cache and FP8 scales after waking from sleep.
-        1. Zero out the KV cache tensors to remove garbage data from re-allocation.
-        2. Reset Attention layer scaling factors (_k_scale, _v_scale) to 1.0.
-          If these are left at 0.0 (default after wake_up), all KV cache values
-          become effectively zero, causing gibberish output.
+        从休眠唤醒后重新初始化 KV cache 与 FP8 缩放因子。
+        1. 将 KV cache 张量清零,去除重新分配带来的垃圾数据。
+        2. 把注意力层缩放因子(_k_scale、_v_scale)重置为 1.0。
+          若留在 0.0(唤醒后的默认值),所有 KV cache 值实际变为零,
+          导致输出乱码。
         """
         if not is_quantized_kv_cache(self.cache_config.cache_dtype):
+            # 非量化 KV cache 无需处理。
             return
 
+        # 取 KV cache 条目列表。
         kv_caches = getattr(self, "kv_caches", [])
         for cache_entry in kv_caches:
             if cache_entry is None:
+                # 跳过空条目。
                 continue
-            # Hybrid models (Mamba, DeltaNet) store per-layer state as a
-            # list of tensors rather than a single tensor.
+            # 混合模型(Mamba、DeltaNet)按层以张量列表而非单张量
+            # 存放状态。
             if isinstance(cache_entry, list):
                 for t in cache_entry:
+                    # 逐个清零。
                     t.zero_()
             else:
+                # 单张量直接清零。
                 cache_entry.zero_()
 
+        # K 缩放因子可能的属性名。
         k_attr_names = ("_k_scale", "k_scale")
+        # V 缩放因子可能的属性名。
         v_attr_names = ("_v_scale", "v_scale")
 
+        # 取静态前向上下文中的各层。
         attn_layers = self.compilation_config.static_forward_context
         for name, module in attn_layers.items():
             if isinstance(module, (Attention, MLAAttention)):
-                # TODO: Generally, scale is 1.0 if user uses on-the-fly fp8
-                # kvcache quant. However, to get better accuracy, compression
-                # frameworks like llm-compressors allow users to tune the
-                # scale. We may need to restore the specific calibrated scales
-                # here in the future.
+                # TODO: 一般而言,用户使用在线 fp8 kv cache 量化时缩放
+                # 因子为 1.0。但为获得更好精度,llm-compressors 等压缩
+                # 框架允许用户调整缩放因子。未来可能需要在此恢复
+                # 特定的校准缩放。
                 k_scale_val, v_scale_val = 1.0, 1.0
 
-                # Processing K Scale
+                # 处理 K 缩放。
                 for attr in k_attr_names:
                     if hasattr(module, attr):
+                        # 取参数并填充。
                         param = getattr(module, attr)
                         if isinstance(param, torch.Tensor):
                             param.fill_(k_scale_val)
 
-                # Processing V Scale
+                # 处理 V 缩放。
                 for attr in v_attr_names:
                     if hasattr(module, attr):
+                        # 取参数并填充。
                         param = getattr(module, attr)
                         if isinstance(param, torch.Tensor):
                             param.fill_(v_scale_val)
 
     def _get_positions(self, num_tokens: Any):
+        # 获取位置张量:整数为切片长度,序列为索引集合。
         if isinstance(num_tokens, int):
+            # 按长度切片。
             if self.uses_mrope:
+                # mrope:返回 3D 位置切片。
                 return self.mrope_positions.gpu[:, :num_tokens]
             if self.uses_xdrope_dim > 0:
+                # xdrope:返回多维位置切片。
                 return self.xdrope_positions.gpu[:, :num_tokens]
+            # 常规 1D 位置切片。
             return self.positions[:num_tokens]
         else:
+            # 按索引集合切片。
             if self.uses_mrope:
                 return self.mrope_positions.gpu[:, num_tokens]
             if self.uses_xdrope_dim > 0:
@@ -1055,6 +1365,7 @@ class GPUModelRunner(
     def _make_buffer(
         self, *size: int | torch.SymInt, dtype: torch.dtype, numpy: bool = True
     ) -> CpuGpuBuffer:
+        # 创建 CPU/GPU 双缓冲。
         return CpuGpuBuffer(
             *size,
             dtype=dtype,
@@ -1063,11 +1374,12 @@ class GPUModelRunner(
         )
 
     def _get_mamba_bufs(self) -> mamba_utils.MambaBuffers:
-        # Only reachable on the ``mamba_cache_mode == "align"`` path.
-        # The postprocess sub-object is additionally gated on spec
-        # decode + hybrid model.
+        # 仅在 ``mamba_cache_mode == "align"`` 路径可达。
+        # 后处理子对象额外要求投机解码 + hybrid 模型。
+        # 断言模式正确。
         assert self.cache_config.mamba_cache_mode == "align"
         if self._mamba_bufs is None:
+            # 惰性创建 Mamba 缓冲区。
             self._mamba_bufs = mamba_utils.MambaBuffers.create(
                 max_num_reqs=self.max_num_reqs,
                 kv_cache_config=self.kv_cache_config,
@@ -1078,17 +1390,23 @@ class GPUModelRunner(
                     self.speculative_config is not None and self.model_config.is_hybrid
                 ),
             )
+        # 返回缓冲区。
         return self._mamba_bufs
 
     def _init_model_kwargs(self):
+        # 构建模型额外关键字参数(池化模型的 token_type_ids)。
+        # 初始化空字典。
         model_kwargs = dict[str, Any]()
 
         if not self.is_pooling_model:
+            # 非池化模型直接返回。
             return model_kwargs
 
+        # 取请求数与池化参数。
         num_reqs = self.input_batch.num_reqs
         pooling_params = self.input_batch.get_pooling_params()
 
+        # 收集带压缩 token_type_ids 的请求。
         token_type_id_requests = dict[int, Any]()
         for i, param in enumerate(pooling_params):
             if (
@@ -1096,50 +1414,60 @@ class GPUModelRunner(
                 and (token_types := param.extra_kwargs.get("compressed_token_type_ids"))
                 is not None
             ):
+                # 记录该请求的 token 类型。
                 token_type_id_requests[i] = token_types
 
         if len(token_type_id_requests) == 0:
+            # 无此类请求,返回空 kwargs。
             return model_kwargs
 
-        # Build ids on CPU using the CPU-resident upper bound for seq_lens;
-        # `torch.arange(seq_lens[i])` with a GPU scalar would force a sync.
+        # 使用 CPU 侧 seq_lens 上界在 CPU 上构建 id;
+        # 带GPU 标量的 torch.arange(seq_lens[i]) 会强制同步。
+        # 取各请求序列长度列表。
         seq_lens_cpu = self.optimistic_seq_lens_cpu[:num_reqs].tolist()
+        # token 类型 id 列表。
         token_type_ids = []
 
         for i in range(num_reqs):
+            # 该请求的序列长度。
             seq_len_i = seq_lens_cpu[i]
+            # 压缩 token 类型起点(默认在末尾)。
             pos = token_type_id_requests.get(i, seq_len_i)
+            # 位置 >= pos 的标记为 1。
             ids = (torch.arange(seq_len_i) >= pos).int()
             token_type_ids.append(ids)
 
+        # 拼接进锁页 CPU 缓冲。
         token_type_ids_cpu = torch.empty(
             sum(seq_lens_cpu), dtype=torch.int32, pin_memory=PIN_MEMORY
         )
+        # 拼接所有 token 类型 id。
         torch.cat(token_type_ids, out=token_type_ids_cpu)
+        # 异步拷贝到 GPU 并写入 kwargs。
         model_kwargs["token_type_ids"] = token_type_ids_cpu.to(
             device=self.device, non_blocking=True
         )
+        # 返回模型 kwargs。
         return model_kwargs
 
     def _may_reorder_batch(self, scheduler_output: "SchedulerOutput") -> None:
         """
-        Update the order of requests in the batch based on the attention
-        backend's needs. For example, some attention backends (namely MLA) may
-        want to separate requests based on if the attention computation will be
-        compute-bound or memory-bound.
+        根据注意力后端的需要更新批次中请求的顺序。例如某些注意力
+        后端(即 MLA)可能希望按注意力计算是计算受限还是内存受限
+        来分离请求。
 
         Args:
-            scheduler_output: The scheduler output.
+            scheduler_output: 调度器输出。
         """
-        # Attention free models have zero kv_cache_groups, however models
-        # like Mamba are also attention free but use the kv_cache for
-        # keeping its internal state. This is why we check the number
-        # of kv_cache groups instead of solely checking
-        # for self.model_config.is_attention_free.
+        # 无注意力模型没有 kv_cache_groups,但 Mamba 等模型虽无注意力
+        # 却用 kv_cache 保存内部状态。因此检查 kv_cache 组数量而非
+        # 仅看 self.model_config.is_attention_free。
         if len(self.kv_cache_config.kv_cache_groups) == 0:
+            # 无 KV cache 组,直接返回。
             return
 
         if self.reorder_batch_threshold is not None:
+            # 设置了重排阈值时执行解码/prefill 分离重排。
             reorder_batch_to_split_decodes_and_prefills(
                 self.input_batch,
                 scheduler_output,
@@ -1147,10 +1475,11 @@ class GPUModelRunner(
             )
 
     def _init_kv_zero_meta(self) -> None:
-        """One-time precomputation for _zero_block_ids.
+        """_zero_block_ids 的一次性预计算。
 
-        Called from gpu_worker.py outside the CuMem pool context.
+        由 gpu_worker.py 在 CuMem 池上下文之外调用。
         """
+        # 创建 KV 块清零器。
         self._kv_block_zeroer = KVBlockZeroer(
             self.device,
             attn_groups_iter=self._kv_cache_spec_attn_group_iterator(),
@@ -1161,74 +1490,89 @@ class GPUModelRunner(
         )
 
     def _zero_block_ids(self, block_ids: list[int]) -> None:
-        """Zero the KV cache memory for the given block IDs."""
+        """对给定块 id 清零 KV cache 显存。"""
         if hasattr(self, "_kv_block_zeroer"):
+            # 清零器已初始化则执行清零。
             self._kv_block_zeroer.zero_block_ids(block_ids)
 
-    # Note: used for model runner override.
+    # 注意: 供子类 model runner 覆盖。
     def _init_device_properties(self) -> None:
-        """Initialize attributes from torch.cuda.get_device_properties"""
+        """从 torch.cuda.get_device_properties 初始化属性"""
 
+        # 记录 SM 数量。
         self.num_sms = num_compute_units(self.device.index)
 
-    # Note: used for model runner override.
+    # 注意: 供子类 model runner 覆盖。
     def _sync_device(self) -> None:
+        # 同步设备。
         torch.accelerator.synchronize()
 
+    # 获取或创建异步输出复制专用的 CUDA 流(惰性初始化)。
     def _get_or_create_async_output_copy_stream(self) -> torch.cuda.Stream:
+        # 读取当前已保存的异步输出复制流。
         stream = self.async_output_copy_stream
+        # 若尚未创建,则新建一个 CUDA 流并缓存起来。
         if stream is None:
             stream = torch.cuda.Stream()
             self.async_output_copy_stream = stream
+        # 返回该 CUDA 流。
         return stream
 
+    # 请求状态被移除时的钩子方法。
     def _on_request_state_removed(
         self,
         req_id: str,
         req_state: CachedRequestState | None,
     ) -> None:
-        """Hook for platform runners to clean request-scoped side caches."""
+        """供平台相关 runner 清理请求级旁路缓存的钩子。"""
+        # 显式丢弃参数,表示默认无需额外清理。
         del req_id, req_state
 
+    # 处理调度器输出中的编码器缓存生命周期更新。
     def _process_encoder_cache_scheduler_output(
         self,
         scheduler_output: "SchedulerOutput",
     ) -> None:
-        """Apply scheduler-side encoder cache lifecycle updates."""
+        """应用调度器侧的编码器缓存生命周期更新。"""
+        # 遍历调度器要求释放的多模态哈希。
         for mm_hash in scheduler_output.free_encoder_mm_hashes:
+            # 从编码器缓存中弹出对应条目(若存在)。
             self.encoder_cache.pop(mm_hash, None)
 
+    # 根据调度器输出更新缓存请求状态与持久批次。
     def _update_states(self, scheduler_output: "SchedulerOutput") -> Callable | None:
-        """Update the cached states and the persistent batch with the scheduler
-        output.
+        """根据调度器输出更新缓存请求状态和持久批次。
 
-        The updated states are used by the `_prepare_inputs` function to create
-        the input GPU tensors for the model.
+        更新后的状态将由 `_prepare_inputs` 函数用于创建模型的输入 GPU 张量。
 
-        The SamplingMetadata is updated and copied to the GPU if there is a
-        new/resumed/paused/finished request in the batch.
+        当批次中存在新增/恢复/暂停/已完成的请求时,SamplingMetadata 会被更新
+        并复制到 GPU。
         """
-        # Remove finished requests from the cached states.
+        # 从缓存状态中移除已完成的请求。
         for req_id in scheduler_output.finished_req_ids:
+            # 弹出该请求的缓存状态(可能不存在)。
             req_state = self.requests.pop(req_id, None)
+            # 调用移除钩子,便于平台侧做额外清理。
             self._on_request_state_removed(req_id, req_state)
+            # 移除该请求的 prompt logprobs 数量记录。
             self.num_prompt_logprobs.pop(req_id, None)
+        # 通知 late_interaction runner 这些请求已结束。
         self.late_interaction_runner.on_requests_finished(
             scheduler_output.finished_req_ids
         )
-        # Remove the finished requests from the persistent batch.
-        # NOTE(woosuk): There could be an edge case where finished_req_ids and
-        # scheduled_req_ids overlap. This happens when a request is aborted and
-        # then resubmitted with the same ID. In this case, we treat them as two
-        # distinct requests - clearing the cached states for the first request
-        # and handling the second as a new request.
+        # 将已完成的请求从持久批次中移除。
+        # 注意(woosuk): 存在 finished_req_ids 与 scheduled_req_ids 重叠的边界情况。
+        # 这发生在请求被中止后又以相同 ID 重新提交时。此时我们把它们视为两个不同的
+        # 请求——先清除第一个请求的缓存状态,再把第二个当作新请求处理。
         for req_id in scheduler_output.finished_req_ids:
+            # 从持久批次中移除该请求。
             self.input_batch.remove_request(req_id)
 
-        # Zero GPU memory for freshly allocated cache blocks to prevent
-        # stale NaN/data from corrupting attention or SSM computation.
+        # 为新分配的缓存块清零 GPU 显存,防止残留的 NaN/旧数据污染注意力或 SSM 计算。
         if scheduler_output.new_block_ids_to_zero:
+            # 对这些新块执行清零操作。
             self._zero_block_ids(scheduler_output.new_block_ids_to_zero)
+        # 若调度器指定了 KV cache 块拷贝,则原地执行拷贝。
         if scheduler_output.kv_cache_block_copies:
             copy_kv_cache_blocks_inplace(
                 self.kv_caches,
@@ -1236,62 +1580,69 @@ class GPUModelRunner(
                 scheduler_output.kv_cache_block_copies,
             )
 
-        # Free the cached encoder outputs.
+        # 释放已缓存的编码器输出。
         self._process_encoder_cache_scheduler_output(scheduler_output)
 
-        # Remove the unscheduled requests from the persistent batch.
-        # NOTE(woosuk): The unscheduled requests are either preempted requests
-        # or running requests that are not scheduled in this step. We remove
-        # them from the persistent batch but keep their cached states since
-        # they will be scheduled again sometime in the future.
+        # 将未被调度的请求从持久批次中移除。
+        # 注意(woosuk): 未被调度的请求要么是被抢占的请求,要么是本步未被调度但将来
+        # 仍可能被再次调度的运行中请求。我们将它们移出持久批次,但保留其缓存状态,
+        # 因为它们将来某个时刻会被再次调度。
         scheduled_req_ids = scheduler_output.num_scheduled_tokens.keys()
         cached_req_ids = self.input_batch.req_id_to_index.keys()
         resumed_req_ids = scheduler_output.scheduled_cached_reqs.resumed_req_ids
-        # NOTE(zhuohan): cached_req_ids and resumed_req_ids are usually disjoint,
-        # so `(scheduled_req_ids - resumed_req_ids) == scheduled_req_ids` holds
-        # apart from the forced-preemption case in reset_prefix_cache. And in
-        # that case we include the resumed_req_ids in the unscheduled set so
-        # that they get cleared from the persistent batch before being re-scheduled
-        # in the normal resumed request path.
+        # 注意(zhuohan): cached_req_ids 与 resumed_req_ids 通常不相交,因此除
+        # reset_prefix_cache 中的强制抢占场景外,`(scheduled_req_ids - resumed_req_ids)
+        # == scheduled_req_ids` 成立。在该场景下我们把 resumed_req_ids 也纳入未调度
+        # 集合,使它们在经由正常的恢复请求路径重新调度之前,先从持久批次中被清除。
         unscheduled_req_ids = cached_req_ids - (scheduled_req_ids - resumed_req_ids)
-        # NOTE(woosuk): The persistent batch optimization assumes that
-        # consecutive batches contain mostly the same requests. If batches
-        # have low request overlap (e.g., alternating between two distinct
-        # sets of requests), this optimization becomes very inefficient.
+        # 注意(woosuk): 持久批次优化假设相邻批次包含的请求大多相同。若批次间请求
+        # 重叠度很低(例如在两组不同请求之间交替),该优化将变得非常低效。
         for req_id in unscheduled_req_ids:
+            # 从持久批次中移除未被调度的请求。
             self.input_batch.remove_request(req_id)
 
+        # 判断是否启用 ngram_gpu 投机解码。
         is_ngram_gpu = (
             self.speculative_config is not None
             and self.speculative_config.use_ngram_gpu()
         )
+        # 若启用 ngram_gpu,则准备跟踪新增请求的列表。
         if is_ngram_gpu:
             ngram_gpu_new_reqs: list[CachedRequestState] = []
 
+        # 待加入持久批次的请求列表。
         reqs_to_add: list[CachedRequestState] = []
+        # 延迟到模型前向之后再执行的投机解码修正列表。
         deferred_spec_decode_corrections = []
 
-        # Add new requests to the cached states.
+        # 将新请求加入缓存状态。
         for new_req_data in scheduler_output.scheduled_new_reqs:
+            # 取出新请求的请求 ID。
             req_id = new_req_data.req_id
+            # 若该 ID 已存在于缓存状态中(仅流式场景会出现)。
             if req_id in self.requests:
-                # For streaming case only.
+                # 更新流式请求状态并加入待添加列表。
                 req_state = self._update_streaming_request(req_id, new_req_data)
                 reqs_to_add.append(req_state)
                 continue
 
+            # 取出采样参数与池化参数。
             sampling_params = new_req_data.sampling_params
             pooling_params = new_req_data.pooling_params
 
+            # 若采样类型为"指定随机种子"。
             if (
                 sampling_params
                 and sampling_params.sampling_type == SamplingType.RANDOM_SEED
             ):
+                # 在当前设备上创建随机数生成器并设置种子。
                 generator = torch.Generator(device=self.device)
                 generator.manual_seed(sampling_params.seed)
             else:
+                # 否则不使用专属生成器。
                 generator = None
 
+            # 若是池化模型,则校验并应用池化参数更新。
             if self.is_pooling_model:
                 assert pooling_params is not None
                 task = pooling_params.task
@@ -1301,6 +1652,7 @@ class GPUModelRunner(
                 to_update = model.pooler.get_pooling_updates(task)
                 to_update.apply(pooling_params)
 
+            # 为该新请求构建缓存请求状态对象。
             req_state = CachedRequestState(
                 req_id=req_id,
                 prompt_token_ids=new_req_data.prompt_token_ids,
@@ -1313,11 +1665,13 @@ class GPUModelRunner(
                 block_ids=new_req_data.block_ids,
                 num_computed_tokens=new_req_data.num_computed_tokens,
                 output_token_ids=[],
-                lora_request=new_req_data.lora_request,
             )
+            # 将新请求状态登记到请求字典。
             self.requests[req_id] = req_state
+            # 在 late_interaction runner 中注册该请求。
             self.late_interaction_runner.register_request(req_id, pooling_params)
 
+            # 若请求了 prompt logprobs,则记录其数量(-1 表示整个词表)。
             if sampling_params and sampling_params.prompt_logprobs is not None:
                 self.num_prompt_logprobs[req_id] = (
                     self.input_batch.vocab_size
@@ -1325,210 +1679,236 @@ class GPUModelRunner(
                     else sampling_params.prompt_logprobs
                 )
 
-            # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
+            # 仅对使用 M-RoPE 的模型有效(例如 Qwen2-VL)。
             if self.uses_mrope:
+                # 初始化 M-RoPE 位置。
                 self._init_mrope_positions(req_state)
 
-            # Only relevant for models using XD-RoPE (e.g, HunYuan-VL)
+            # 仅对使用 XD-RoPE 的模型有效(例如 HunYuan-VL)。
             if self.uses_xdrope_dim > 0:
+                # 初始化 XD-RoPE 位置。
                 self._init_xdrope_positions(req_state)
 
+            # 将新请求加入待添加列表。
             reqs_to_add.append(req_state)
-            # Track new requests for ngram_gpu full tensor copy
+            # 为 ngram_gpu 全张量拷贝跟踪新请求。
             if is_ngram_gpu:
                 ngram_gpu_new_reqs.append(req_state)
 
-        # Update the states of the running/resumed requests.
+        # 更新运行中/恢复中请求的状态。
         is_last_rank = get_pp_group().is_last_rank
         req_data = scheduler_output.scheduled_cached_reqs
         scheduled_spec_tokens = scheduler_output.scheduled_spec_decode_tokens
 
-        # Save scheduler-allocated spec lengths before trimming so
-        # prev_num_draft_len keeps the optimistic count for rejection correction.
+        # 在裁剪前保存调度器分配的投机 token 数,使 prev_num_draft_len
+        # 保留乐观计数,用于后续的拒绝修正。
         original_num_spec_per_req: dict[str, int] = {}
         if (
             self.speculative_config is not None
             and self.speculative_config.use_ngram_gpu()
         ):
+            # 记录每个请求原始的投机 token 数量。
             for req_id, toks in scheduled_spec_tokens.items():
                 original_num_spec_per_req[req_id] = len(toks)
+            # 针对无效草稿同步更新调度器侧的计数。
             update_scheduler_for_invalid_drafts(
                 self._num_valid_draft_tokens_event,
                 self._num_valid_draft_tokens_cpu,
                 scheduler_output,
                 self.input_batch.req_id_to_index,
             )
+        # 若启用异步投机解码,先清零上一轮的草稿数量数组。
         if self.use_async_spec_decode:
             self.prev_num_draft_tokens.np.fill(0)
 
+        # 遍历调度器返回的缓存请求数据,逐个更新状态。
         for i, req_id in enumerate(req_data.req_ids):
+            # 取出该请求的缓存状态。
             req_state = self.requests[req_id]
+            # 取出本次已计算的 token 数。
             num_computed_tokens = req_data.num_computed_tokens[i]
+            # 取出新增的块 ID 列表。
             new_block_ids = req_data.new_block_ids[i]
+            # 判断该请求是否从抢占中恢复。
             resumed_from_preemption = req_id in req_data.resumed_req_ids
+            # 取出该请求的输出 token 总数。
             num_output_tokens = req_data.num_output_tokens[i]
+            # 查询该请求在持久批次中的索引(可能不存在)。
             req_index = self.input_batch.req_id_to_index.get(req_id)
 
+            # 异步调度+投机解码下,依据上一轮草稿长度决定是否修正已计算 token 数。
             if req_state.prev_num_draft_len and self.use_async_scheduling:
-                # prev_num_draft_len is used in async scheduling mode with
-                # spec decode. it indicates if need to update num_computed_tokens
-                # of the request. for example:
-                # first step: num_computed_tokens = 0, spec_tokens = [],
-                # prev_num_draft_len = 0.
-                # second step: num_computed_tokens = 100(prompt length),
-                # spec_tokens = [a,b], prev_num_draft_len = 0.
-                # third step: num_computed_tokens = 100 + 2, spec_tokens = [c,d],
-                # prev_num_draft_len = 2.
-                # num_computed_tokens in first step and second step doesn't contain
-                # the spec tokens length, but in third step it contains the
-                # spec tokens length. we only need to update num_computed_tokens
-                # when prev_num_draft_len > 0.
+                # prev_num_draft_len 用于带投机解码的异步调度模式,表示是否需要
+                # 更新该请求的 num_computed_tokens。例如:
+                # 第一步: num_computed_tokens = 0, spec_tokens = [],
+                # prev_num_draft_len = 0。
+                # 第二步: num_computed_tokens = 100(prompt 长度),
+                # spec_tokens = [a,b], prev_num_draft_len = 0。
+                # 第三步: num_computed_tokens = 100 + 2, spec_tokens = [c,d],
+                # prev_num_draft_len = 2。
+                # 第一步和第二步的 num_computed_tokens 不包含投机 token 的长度,
+                # 但第三步包含。只有当 prev_num_draft_len > 0 时才需要更新
+                # num_computed_tokens。
                 if req_index is None:
+                    # 请求不在批次中,直接清零草稿长度。
                     req_state.prev_num_draft_len = 0
                 else:
-                    # Optimistically assume all accepted; queue up a correction
-                    # to be called after the model forward to preserve async
-                    # scheduling. Corrected on GPU in _prepare_inputs.
+                    # 乐观假设草稿全部被接受;排队一个修正操作,在模型前向之后
+                    # 调用,以保持异步调度。该修正在 _prepare_inputs 中于 GPU 侧完成。
                     optimistic_num_accepted = req_state.prev_num_draft_len
+                    # 用 -1 占位扩展输出 token 列表(等待后续修正)。
                     req_state.output_token_ids.extend([-1] * optimistic_num_accepted)
 
+                    # 将该请求加入延迟修正列表。
                     deferred_spec_decode_corrections.append(
                         (req_id, optimistic_num_accepted, req_state)
                     )
 
+                    # 查询该请求在上一轮批次中的索引。
                     prev_req_index = (
                         self.input_batch.prev_req_id_to_index.get(req_id)
                         if self.input_batch.prev_req_id_to_index
                         else None
                     )
+                    # 记录乐观接受的草稿 token 数。
                     if prev_req_index is not None:
                         self.prev_num_draft_tokens.np[prev_req_index] = (
                             optimistic_num_accepted
                         )
 
+                    # ngram_gpu 模式下同步增加无投机 token 数。
                     if is_ngram_gpu and optimistic_num_accepted > 0:
                         self.input_batch.num_tokens_no_spec[req_index] += (
                             optimistic_num_accepted
                         )
 
-            # Update the cached states.
+            # 更新缓存状态:记录本次已计算的 token 数。
             req_state.num_computed_tokens = num_computed_tokens
 
+            # 非最后一个 PP rank 时,需要从调度器数据恢复新 token。
             if not is_last_rank:
                 if not req_data.new_token_ids:
-                    # Async scheduled PP: Sampled tokens propagated via GPU broadcast.
+                    # 异步调度的流水线并行:采样 token 通过 GPU 广播传播。
                     new_token_ids: list[int] = []
                 else:
-                    # Non-async scheduling with PP: The scheduler sends
-                    # sampled token ids back because there's no direct communication
-                    # between the first-stage worker and the last-stage worker.
+                    # 非异步调度的流水线并行:调度器回传采样 token ID,
+                    # 因为第一阶段 worker 与最后阶段 worker 之间没有直接通信。
                     new_token_ids = req_data.new_token_ids[i]
-                    # Add the sampled token(s) from the previous step (if any).
-                    # This doesn't include "unverified" tokens like spec tokens.
+                    # 追加上一步的采样 token(若有)。这不包括投机 token 等"未验证" token。
                     num_new_tokens = (
                         num_computed_tokens + len(new_token_ids) - req_state.num_tokens
                     )
                     if num_new_tokens == 1:
-                        # Avoid slicing list in most common case.
+                        # 最常见情形下避免列表切片。
                         req_state.output_token_ids.append(new_token_ids[-1])
                     elif num_new_tokens > 0:
+                        # 扩展输出 token 列表。
                         req_state.output_token_ids.extend(
                             new_token_ids[-num_new_tokens:]
                         )
             elif num_output_tokens < len(req_state.output_token_ids):
-                # Some output tokens were discarded due to a sync-KV-load
-                # failure, or output_token_ids was inflated by the optimistic
-                # extend above (async spec decode). Align the cached state.
+                # 某些输出 token 因同步 KV 加载失败被丢弃,或 output_token_ids
+                # 因上面的乐观扩展(async spec decode)而虚高。对齐缓存状态。
                 del req_state.output_token_ids[num_output_tokens:]
                 if req_index is not None:
+                    # 计算该请求的 token 边界(prompt+输出)。
                     end_idx = (
                         self.input_batch.num_prompt_tokens[req_index]
                         + num_output_tokens
                     )
+                    # 更新无投机 token 数。
                     self.input_batch.num_tokens_no_spec[req_index] = end_idx
 
-            # Update the block IDs.
+            # 更新块 ID。
             if not resumed_from_preemption:
                 if new_block_ids is not None:
-                    # Append the new blocks to the existing block IDs.
+                    # 将新块追加到现有块 ID 之后。
                     for block_ids, new_ids in zip(req_state.block_ids, new_block_ids):
                         block_ids.extend(new_ids)
             else:
+                # 断言该请求不在持久批次中且新块 ID 存在。
                 assert req_index is None
                 assert new_block_ids is not None
-                # The request is resumed from preemption.
-                # Replace the existing block IDs with the new ones.
+                # 该请求从抢占中恢复。
+                # 用新块 ID 替换现有块 ID。
                 req_state.block_ids = new_block_ids
 
             if req_index is None:
-                # The request is not in the persistent batch.
-                # The request was either preempted and resumed later, or was not
-                # scheduled in the previous step and needs to be added again.
+                # 该请求不在持久批次中。
+                # 它要么被抢占后恢复,要么上一步未被调度而需要重新加入。
 
                 if self.use_async_scheduling and num_output_tokens > 0:
-                    # We must recover the output token ids for resumed requests in the
-                    # async scheduling case, so that correct input_ids are obtained.
+                    # 异步调度场景下必须恢复被恢复请求的输出 token ID,
+                    # 以获得正确的 input_ids。
                     resumed_token_ids = req_data.all_token_ids[req_id]
                     req_state.output_token_ids = resumed_token_ids[-num_output_tokens:]
 
+                # 将该请求加入待添加列表。
                 reqs_to_add.append(req_state)
-                # Track resumed requests for ngram_gpu full tensor copy
+                # 为 ngram_gpu 全张量拷贝跟踪恢复的请求。
                 if is_ngram_gpu:
                     ngram_gpu_new_reqs.append(req_state)
                 continue
 
-            # Update the persistent batch.
+            # 更新持久批次。
             self.input_batch.num_computed_tokens_cpu[req_index] = num_computed_tokens
             if new_block_ids is not None:
+                # 向块表写入新块 ID 行。
                 self.input_batch.block_table.append_row(new_block_ids, req_index)
 
-            # For the last rank, we don't need to update the token_ids_cpu
-            # because the sampled tokens are already cached.
+            # 最后一个 rank 无需更新 token_ids_cpu,因为采样 token 已被缓存。
             if not is_last_rank:
+                # 起始 token 索引。
                 start_token_index = self.input_batch.num_tokens_no_spec[req_index]
-                # For chunked prefill, num_computed_tokens may less
-                # than num_tokens_no_spec.
-                # Async scheduled PP: no new_token_ids, advance num_tokens_no_spec
-                # according to num_computed_tokens.
+                # 对分块 prefill,num_computed_tokens 可能小于 num_tokens_no_spec。
+                # 异步调度的流水线并行:没有 new_token_ids,按 num_computed_tokens
+                # 推进 num_tokens_no_spec。
                 end_token_index = max(
                     start_token_index,
                     num_computed_tokens + len(new_token_ids),
                 )
+                # 若结束索引大于起始索引,则写入新 token。
                 if end_token_index > start_token_index:
                     if new_token_ids:
-                        # Add new_token_ids to token_ids_cpu.
+                        # 将 new_token_ids 写入 token_ids_cpu。
                         num_new_tokens = end_token_index - start_token_index
                         tokens_to_append = new_token_ids[-num_new_tokens:]
                         self.input_batch.token_ids_cpu[
                             req_index, start_token_index:end_token_index
                         ] = tokens_to_append
+                    # 标记这些位置为 token ID。
                     self.input_batch.is_token_ids[
                         req_index, start_token_index:end_token_index
                     ] = True
+                    # 推进无投机 token 数。
                     self.input_batch.num_tokens_no_spec[req_index] = end_token_index
 
-            # Add spec_token_ids to token_ids_cpu.
+            # 将投机 token ID 写入 token_ids_cpu。
             self.input_batch.update_req_spec_token_ids(req_state, scheduled_spec_tokens)
-            # Restore scheduler-side draft count after ngram trimming.
+            # 在 ngram 裁剪后恢复调度器侧的草稿数量。
             if original_num_spec_per_req:
+                # 取出原始投机 token 数。
                 orig = original_num_spec_per_req.get(req_id, 0)
+                # 若与当前草稿长度不同则恢复。
                 if orig != req_state.prev_num_draft_len:
                     req_state.prev_num_draft_len = orig
 
-        # Add the new or resumed requests to the persistent batch.
-        # The smaller empty indices are filled first.
+        # 将新增或恢复的请求加入持久批次。
+        # 较小的空闲索引优先被填充。
         for request in reqs_to_add:
+            # 将请求加入批次。
             self.input_batch.add_request(request)
+            # 写入投机 token ID。
             self.input_batch.update_req_spec_token_ids(request, scheduled_spec_tokens)
 
-        # Condense the batched states if there are gaps left by removed requests
+        # 若移除请求留下了空隙,则压缩批次状态。
         self.input_batch.condense()
-        # Allow attention backend to reorder the batch, potentially
+        # 允许注意力后端潜在地重排批次。
         self._may_reorder_batch(scheduler_output)
-        # Refresh batch metadata with any pending updates.
+        # 用待处理的更新刷新批次元数据。
         self.input_batch.refresh_metadata()
 
-        # Incrementally update ngram_gpu tensors after batch is stable
+        # 在批次稳定后增量更新 ngram_gpu 张量。
         if is_ngram_gpu:
             update_ngram_gpu_tensors_incremental(
                 self.input_batch,
@@ -1540,65 +1920,78 @@ class GPUModelRunner(
                 _pinned_val_buf=self._ngram_pinned_val_buf,
             )
 
+        # 若存在延迟的投机解码修正,则返回修正回调。
         if deferred_spec_decode_corrections:
 
             def correct_spec_decode_token_counts():
+                # 获取 GPU 侧统计的有效采样 token 数。
                 valid_sampled_token_count = self._get_valid_sampled_token_count()
                 if not valid_sampled_token_count:
+                    # 无有效数据则直接返回。
                     return
                 prev_req_id_to_index = self.input_batch.prev_req_id_to_index
                 if not prev_req_id_to_index:
                     return
+                # 遍历延迟修正项。
                 for (
                     req_id,
                     optimistic_num_accepted,
                     req_state,
                 ) in deferred_spec_decode_corrections:
+                    # 查询该请求在上一轮批次中的索引。
                     prev_req_index = prev_req_id_to_index.get(req_id)
                     if prev_req_index is None:
                         continue
+                    # 有效接受数 = 有效采样数 - 1(最后一个为真实采样 token)。
                     num_accepted = valid_sampled_token_count[prev_req_index] - 1
+                    # 计算乐观值与实际接受数的差值。
                     correction = optimistic_num_accepted - num_accepted
+                    # 修正请求状态的已计算 token 数。
                     req_state.num_computed_tokens -= correction
+                    # 查询该请求在当前批次中的索引。
                     cur_req_index = self.input_batch.req_id_to_index.get(req_id)
                     if cur_req_index is None:
                         continue
+                    # 修正持久批次中的已计算 token 数。
                     self.input_batch.num_computed_tokens_cpu[cur_req_index] -= (
                         correction
                     )
+                    # ngram_gpu 模式下同步修正无投机 token 数(CPU 与 GPU 两侧)。
                     if is_ngram_gpu and correction > 0:
                         self.input_batch.num_tokens_no_spec[cur_req_index] -= correction
                         self.num_tokens_no_spec_gpu[cur_req_index] -= correction
 
+            # 返回修正函数,供调用方在模型前向之后执行。
             return correct_spec_decode_token_counts
         else:
+            # 无需修正,返回 None。
             return None
 
+    # 在模型执行后更新缓存状态(用于混合模型的 MTP/EAGLE 投机解码)。
     def _update_states_after_model_execute(
         self, output_token_ids: torch.Tensor, scheduler_output: "SchedulerOutput"
     ) -> None:
-        """Update the cached states after model execution.
+        """在模型执行后更新缓存状态。
 
-        This is used for MTP/EAGLE for hybrid models, as in linear attention,
-        only the last token's state is kept. In MTP/EAGLE, for draft tokens
-        the state are kept util we decide how many tokens are accepted for
-        each sequence, and a shifting is done during the next iteration
-        based on the number of accepted tokens.
+        用于混合模型的 MTP/EAGLE:在线性注意力机制下只保留最后一个 token 的状态。
+        在 MTP/EAGLE 中,草稿 token 的状态会一直保留,直到我们确定每个序列接受了
+        多少 token,并在下一次迭代中根据接受的 token 数量进行状态移位。
         """
+        # 非投机解码或非混合模型时无需处理。
         if not self.speculative_config or not self.model_config.is_hybrid:
             return
 
-        # Count the number of accepted tokens for each sequence.
-        # Valid tokens are contiguous from position 0, so counting non-(-1)
-        # tokens gives us the first -1 position (i.e., number of accepted).
+        # 统计每个序列接受的 token 数。
+        # 有效 token 从位置 0 起连续,因此统计非 -1 的 token 数即得到第一个
+        # -1 出现的位置(即接受的 token 数)。
         num_reqs = output_token_ids.size(0)
         self.num_accepted_tokens.gpu[:num_reqs] = (output_token_ids != -1).sum(dim=1)
 
+        # mamba 缓存模式为 align 时走融合 GPU 后处理路径。
         if self.cache_config.mamba_cache_mode == "align":
-            # Fused GPU postprocess: state copies + per-request accepted-token
-            # update without CPU-GPU sync. The metadata
-            # (num_scheduled_tokens, num_draft_tokens, num_computed_tokens) is
-            # pre-staged to GPU buffers in _prepare_inputs.
+            # 融合的 GPU 后处理:状态拷贝 + 每请求接受 token 更新,无需 CPU-GPU 同步。
+            # 元数据(num_scheduled_tokens、num_draft_tokens、num_computed_tokens)
+            # 已在 _prepare_inputs 中预先放置到 GPU 缓冲区。
             mamba_utils.postprocess_mamba_align_gpu(
                 bufs=self._get_mamba_bufs(),
                 num_reqs=num_reqs,
@@ -1612,15 +2005,21 @@ class GPUModelRunner(
                 mamba_state_copy_funcs=self.model.get_mamba_state_copy_func(),
             )
 
+            # 断言事件已创建。
             assert self.num_accepted_tokens_event is not None
+            # 在当前流上记录事件。
             self.num_accepted_tokens_event.record()
         else:
+            # 将 GPU 上的接受 token 数异步拷贝到 CPU 张量。
             self.input_batch.num_accepted_tokens_cpu_tensor[:num_reqs].copy_(
                 self.num_accepted_tokens.gpu[:num_reqs], non_blocking=True
             )
+            # 断言事件已创建。
             assert self.num_accepted_tokens_event is not None
+            # 在当前流上记录事件。
             self.num_accepted_tokens_event.record()
 
+            # mamba 缓存模式为 all 时,后处理全部 mamba 状态。
             if self.cache_config.mamba_cache_mode == "all":
                 mamba_utils.postprocess_mamba_all(
                     scheduler_output,
@@ -1632,66 +2031,82 @@ class GPUModelRunner(
                     num_reqs,
                 )
 
+    # 从 scheduled_new_reqs 更新流式会话请求的状态。
     def _update_streaming_request(
         self, req_id: str, new_req_data: NewRequestData
     ) -> CachedRequestState:
-        """Updates streaming session request from `scheduled_new_reqs`.
+        """根据 `scheduled_new_reqs` 更新流式会话请求。
 
-        Removes the request from InputBatch (if present), updates the cached
-        state, and prepares it for re-addition to the batch.
+        从 InputBatch 中移除该请求(若存在),更新缓存状态,
+        并为重新加入批次做好准备。
 
-        NOTE: prompt_token_ids includes intermediate output tokens - tokens
-        previously generated but now are input context (part of the prompt).
+        注意: prompt_token_ids 包含中间输出 token——之前生成但现在成为
+        输入上下文(即提示词的一部分)的 token。
         """
+        # 先从持久批次中移除该请求。
         self.input_batch.remove_request(req_id)
+        # 取出该请求的缓存状态。
         req_state = self.requests[req_id]
 
+        # 用最新的请求数据更新各字段。
         req_state.prompt_token_ids = new_req_data.prompt_token_ids
         req_state.mm_features = new_req_data.mm_features
         req_state.prompt_embeds = new_req_data.prompt_embeds
         req_state.sampling_params = new_req_data.sampling_params
         req_state.pooling_params = new_req_data.pooling_params
+        # 在 late_interaction runner 中重新注册该请求。
         self.late_interaction_runner.register_request(req_id, req_state.pooling_params)
+        # 更新块 ID 与已计算 token 数。
         req_state.block_ids = new_req_data.block_ids
         req_state.num_computed_tokens = new_req_data.num_computed_tokens
+        # 重新计算 prompt token 总数。
         req_state.num_prompt_tokens = length_from_prompt_token_ids_or_embeds(
             req_state.prompt_token_ids, req_state.prompt_embeds
         )
 
-        # Clear `output_token_ids` as previous output tokens are now part of
-        # `prompt_token_ids`.
+        # 清空 `output_token_ids`,因为之前的输出 token 现在已成为
+        # `prompt_token_ids` 的一部分。
         req_state.output_token_ids.clear()
 
+        # 若模型使用 M-RoPE,重新初始化其位置。
         if self.uses_mrope:
             self._init_mrope_positions(req_state)
 
+        # 返回更新后的请求状态。
         return req_state
 
+    # 为指定请求初始化 M-RoPE 位置。
     def _init_mrope_positions(self, req_state: CachedRequestState):
+        # 获取当前模型实例。
         model = self.get_model()
+        # 断言模型支持 M-RoPE。
         assert supports_mrope(model), "M-RoPE support is not implemented."
+        # 类型转换为支持 M-RoPE 的模型。
         mrope_model = cast(SupportsMRoPE, model)
 
-        # `prompt_embeds` is a passthrough modality (no grid_thw), models'
-        # M-RoPE code assumes per-feature grid info, so filter it out. The
-        # prompt_embeds positions are treated as text positions for M-RoPE.
+        # `prompt_embeds` 是直通模态(没有 grid_thw),而模型的 M-RoPE 代码假定
+        # 每个特征都有网格信息,因此将其过滤掉。prompt_embeds 的位置按文本位置处理。
         mrope_features = [
             f for f in req_state.mm_features if f.modality != "prompt_embeds"
         ]
 
+        # 依据输入形式确定输入 token 序列。
         if req_state.prompt_token_ids is not None:
+            # 使用 prompt token ID 列表。
             input_tokens = req_state.prompt_token_ids
         elif req_state.prompt_embeds is not None:
-            # For embeddings-only inputs, get_mrope_input_positions only
-            # needs the sequence length when mm_features is empty (which is
-            # the case here since prompt_embeds are filtered out above).
+            # 对仅嵌入的输入,当 mm_features 为空时(即上面的过滤结果),
+            # get_mrope_input_positions 只需要序列长度。
             seq_len = req_state.prompt_embeds.shape[0]
+            # 以连续序号作为输入 token。
             input_tokens = list(range(seq_len))
         else:
+            # 两者都不存在时抛出错误。
             raise ValueError(
                 "M-RoPE requires either prompt_token_ids or prompt_embeds."
             )
 
+        # 调用模型的 M-RoPE 位置计算方法,保存结果与位置偏移量。
         req_state.mrope_positions, req_state.mrope_position_delta = (
             mrope_model.get_mrope_input_positions(
                 input_tokens,
@@ -1699,34 +2114,44 @@ class GPUModelRunner(
             )
         )
 
+    # 为指定请求初始化 XD-RoPE 位置。
     def _init_xdrope_positions(self, req_state: CachedRequestState):
+        # 获取当前模型实例。
         model = self.get_model()
+        # 类型转换为支持 XD-RoPE 的模型。
         xdrope_model = cast(SupportsXDRoPE, model)
+        # 断言 prompt token ID 可用。
         assert req_state.prompt_token_ids is not None, (
             "XD-RoPE requires prompt_token_ids to be available."
         )
+        # 断言模型支持 XD-RoPE。
         assert supports_xdrope(model), "XD-RoPE support is not implemented."
 
+        # 调用模型的 XD-RoPE 位置计算方法并保存结果。
         req_state.xdrope_positions = xdrope_model.get_xdrope_input_positions(
             req_state.prompt_token_ids,
             req_state.mm_features,
         )
 
+    # 从调度器输出中提取多模态的 kwargs 输入。
     def _extract_mm_kwargs(
         self,
         scheduler_output: "SchedulerOutput",
     ) -> BatchedTensorInputs:
+        # 调度器输出为空或模型不是多模态原始输入模型时,返回空字典。
         if not scheduler_output or not self.is_multimodal_raw_input_only_model:
             return {}
 
+        # 收集所有新请求的多模态特征数据。
         mm_kwargs = list[tuple[str, MultiModalKwargsItem]]()
         for req in scheduler_output.scheduled_new_reqs:
             for feature in req.mm_features:
                 if feature.data is not None:
                     mm_kwargs.append((feature.modality, feature.data))
 
-        # Input all modalities at once
+        # 一次性输入所有模态
         mm_kwargs_combined: BatchedTensorInputs = {}
+        # 按模态分组并批量化,再合并到一个字典。
         for _, _, mm_kwargs_batch in group_and_batch_mm_kwargs(
             mm_kwargs,
             device=self.device,
@@ -1734,62 +2159,76 @@ class GPUModelRunner(
         ):
             mm_kwargs_combined.update(mm_kwargs_batch)
 
+        # 返回合并后的多模态输入。
         return mm_kwargs_combined
 
+    # 构建用于性能分析的虚拟多模态 kwargs 输入。
     def _dummy_mm_kwargs(self, num_seqs: int) -> BatchedTensorInputs:
+        # 非多模态原始输入模型时返回空字典。
         if not self.is_multimodal_raw_input_only_model:
             return {}
 
+        # 获取多模态预算管理器。
         mm_budget = self.mm_budget
         assert mm_budget is not None
 
+        # 无塔式模态(仅嵌入模式)时返回空字典。
         if not mm_budget.mm_max_toks_per_item:
-            return {}  # No tower modalities (embed-only mode)
+            return {}  # 无塔式模态(仅嵌入模式)
 
+        # 获取 token 数最多的模态并构造虚拟批次。
         dummy_modality = mm_budget.get_modality_with_max_tokens()
         return self._get_mm_dummy_batch(dummy_modality, num_seqs)
 
+    # 计算给定数组的累积和与批内 arange。
     def _get_cumsum_and_arange(
         self,
         num_tokens: np.ndarray,
         arange_out: np.ndarray,
         cumsum_dtype: np.dtype | None = None,
     ) -> np.ndarray:
-        """Get the cumulative sum and batched arange of the given array.
-        E.g., [2, 5, 3] -> [2, 7, 10], arange written to
-        arange_out[:10] as [0, 1, 0, 1, 2, 3, 4, 0, 1, 2].
-        Equivalent to but faster than:
+        """获取给定数组的累积和与批内 arange。
+        例如,[2, 5, 3] -> [2, 7, 10],arange 写入 arange_out[:10]:
+        [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]。
+        等价于但快于:
         np.concatenate([np.arange(n) for n in num_tokens])
         """
-        # Step 1. [2, 5, 3] -> [2, 7, 10]
+        # 第 1 步: [2, 5, 3] -> [2, 7, 10]
         cu_num_tokens = np.cumsum(num_tokens, dtype=cumsum_dtype)
+        # 总 token 数。
         total_num_tokens = cu_num_tokens[-1]
-        # Step 2. [2, 7, 10] -> [0, 0, 2, 2, 2, 2, 2, 7, 7, 7]
+        # 第 2 步: [2, 7, 10] -> [0, 0, 2, 2, 2, 2, 2, 7, 7, 7]
         cumsums_offsets = np.repeat(cu_num_tokens - num_tokens, num_tokens)
-        # Step 3. [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
+        # 第 3 步: [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
         np.subtract(
             self.arange_np[:total_num_tokens],
             cumsums_offsets,
             out=arange_out[:total_num_tokens],
         )
 
+        # 返回累积和数组。
         return cu_num_tokens
 
+    # 构建 prev_positions 映射:当前位置 -> 上一轮位置(新请求为 -1)。
     def _compute_prev_positions(self, num_reqs: int) -> None:
-        """Build prev_positions mapping: current pos -> previous pos (-1 if new).
+        """构建 prev_positions 映射:当前位置 -> 上一轮位置(新请求为 -1)。
 
-        Populates self.prev_positions.np[:num_reqs] with the mapping.
+        将映射结果填充到 self.prev_positions.np[:num_reqs]。
         """
+        # 获取上一轮的请求 ID 到索引映射。
         prev_req_id_to_index = self.input_batch.prev_req_id_to_index
         prev_positions = self.prev_positions.np[:num_reqs]
 
+        # 上一轮映射为空时,全部填充 -1。
         if not prev_req_id_to_index:
             prev_positions.fill(-1)
             return
 
+        # 逐请求查询上一轮的位置。
         for i, req_id in enumerate(self.input_batch.req_ids[:num_reqs]):
             prev_positions[i] = prev_req_id_to_index.get(req_id, -1)
 
+    # 为当前批次准备输入 ID。
     def _prepare_input_ids(
         self,
         scheduler_output: "SchedulerOutput",
@@ -1797,49 +2236,63 @@ class GPUModelRunner(
         total_num_scheduled_tokens: int,
         cu_num_tokens: np.ndarray,
     ) -> None:
-        """Prepare the input IDs for the current batch.
+        """为当前批次准备输入 ID。
 
-        Carefully handles the `prev_sampled_token_ids` which can be cached
-        from the previous engine iteration, in which case those tokens on the
-        GPU need to be copied into the corresponding slots into input_ids.
+        谨慎处理 `prev_sampled_token_ids`:它可能缓存自上一轮引擎迭代,
+        此时需要把 GPU 上这些 token 拷贝到 input_ids 中对应的槽位。
 
-        Uses self.prev_positions[:num_reqs] which maps current pos -> prev pos
-        (-1 for new requests).
+        使用 self.prev_positions[:num_reqs],它将当前位置映射到上一轮位置
+        (新请求为 -1)。
         """
 
+        # 上一轮采样 token 不可用时,按正常调度情形处理。
         if self.input_batch.prev_sampled_token_ids is None:
-            # Normal scheduling case
+            # 正常调度情形
+            # 将 input_ids 拷贝到 GPU。
             self.input_ids.copy_to_gpu(total_num_scheduled_tokens)
             if self.enable_prompt_embeds:
+                # 启用提示词嵌入时同步拷贝嵌入与 token 标记。
                 self.inputs_embeds.copy_to_gpu(total_num_scheduled_tokens)
                 self.is_token_ids.copy_to_gpu(total_num_scheduled_tokens)
             return
 
-        # Async scheduling case, where some decode requests from the previous
-        # iteration won't have entries in input_ids_cpu and need to be copied
-        # on the GPU from prev_sampled_token_ids.
+        # 异步调度情形:上一轮的部分 decode 请求在 input_ids_cpu 中没有条目,
+        # 需要在 GPU 上从 prev_sampled_token_ids 拷贝。
         prev_positions = self.prev_positions.np[:num_reqs]
         scheduled_spec_tokens = scheduler_output.scheduled_spec_decode_tokens
+        # 采样 token 的扁平化目标索引列表。
         sample_flattened_indices: list[int] = []
+        # 投机 token 的扁平化目标索引列表。
         spec_flattened_indices: list[int] = []
+        # 上一轮草稿 token 的源索引列表。
         prev_draft_token_indices: list[int] = []
+        # 上一轮请求索引列表。
         prev_indices: list[int] = []
+        # 是否所有公共请求的索引都一一对应。
         common_indices_match = True
+        # 最大的扁平化索引。
         max_flattened_index = -1
+        # 投机 token 总数。
         total_num_spec_tokens = 0
 
+        # 遍历当前批次中的每个请求。
         for cur_index in range(num_reqs):
+            # 获取该请求的上一轮位置。
             prev_index = prev_positions[cur_index]
             if prev_index < 0:
+                # 新请求,跳过。
                 continue
+            # 记录上一轮索引。
             prev_indices.append(prev_index)
+            # 获取请求 ID。
             req_id = self.input_batch.req_ids[cur_index]
-            # We need to compute the flattened input_ids index of the
-            # last token in each common request.
+            # 我们需要计算每个公共请求最后一个 token 的扁平化
+            # input_ids 索引。
             draft_len = len(scheduled_spec_tokens.get(req_id, ()))
+            # 累加投机 token 数。
             total_num_spec_tokens += draft_len
             flattened_index = cu_num_tokens[cur_index].item() - 1
-            # example: cu_num_tokens = [2, 5, 8], draft_tokens = [1, 2, 2]
+            # 示例: cu_num_tokens = [2, 5, 8], draft_tokens = [1, 2, 2]
             # sample_flattened_indices = [0, 2, 5]
             # spec_flattened_indices = [1,   3, 4,    6, 7]
             sample_flattened_indices.append(flattened_index - draft_len)
@@ -1847,50 +2300,53 @@ class GPUModelRunner(
                 range(flattened_index - draft_len + 1, flattened_index + 1)
             )
             start = prev_index * self.prev_num_spec_tokens
-            # prev_draft_token_indices is used to find which draft_tokens_id
-            # should be copied to input_ids
-            # example: prev draft_tokens_id [[1,2], [3,4], [5, 6]]
-            # flatten draft_tokens_id [1,2,3,4,5,6]
-            # draft_len of each request [1, 2, 1]
-            # then prev_draft_token_indices is [0,   2, 3,   4]
+            # prev_draft_token_indices 用于确定哪些 draft_tokens_id
+            # 应被拷贝到 input_ids。
+            # 示例: prev draft_tokens_id [[1,2], [3,4], [5, 6]]
+            # 展平 draft_tokens_id [1,2,3,4,5,6]
+            # 每个请求的 draft_len [1, 2, 1]
+            # 则 prev_draft_token_indices 为 [0,   2, 3,   4]
             prev_draft_token_indices.extend(range(start, start + draft_len))
+            # 判断索引是否完全对应。
             common_indices_match &= prev_index == flattened_index
+            # 更新最大扁平化索引。
             max_flattened_index = max(max_flattened_index, flattened_index)
 
+        # 公共请求(与上一轮相同)的数量。
         num_common_tokens = len(sample_flattened_indices)
+        # 不含投机 token 的总调度数。
         total_without_spec = total_num_scheduled_tokens - total_num_spec_tokens
         if self.enable_prompt_embeds:
-            # The multimodal embed path reads is_token_ids.gpu; its .cpu copy is
-            # refreshed every step but the async fast paths below only scatter
-            # input_ids.gpu, so refresh is_token_ids.gpu here too.
+            # 多模态嵌入路径读取 is_token_ids.gpu;其 .cpu 副本每步都会刷新,
+            # 但下面的异步快速路径只散写 input_ids.gpu,因此这里也要刷新
+            # is_token_ids.gpu。
             self.is_token_ids.copy_to_gpu(total_num_scheduled_tokens)
         if num_common_tokens < total_without_spec:
-            # If not all requests are decodes from the last iteration,
-            # we need to copy the input_ids_cpu to the GPU first.
+            # 若并非所有请求都是上一轮的 decode,需要先把 input_ids_cpu
+            # 拷贝到 GPU。
             self.input_ids.copy_to_gpu(total_num_scheduled_tokens)
             if self.enable_prompt_embeds:
                 self.inputs_embeds.copy_to_gpu(total_num_scheduled_tokens)
         if num_common_tokens == 0:
-            # No requests in common with the previous iteration
-            # So input_ids.cpu will have all the input ids.
+            # 与上一轮没有公共请求。
+            # 因此 input_ids.cpu 已包含全部输入 ID。
             return
         if common_indices_match and max_flattened_index == (num_common_tokens - 1):
-            # Common-case optimization: the batch is unchanged
-            # and no reordering happened.
-            # The indices are both the same permutation of 0..N-1 so
-            # we can copy directly using a single slice.
+            # 常见情形优化:批次未变化且没有发生重排。
+            # 两组索引都是 0..N-1 的同一排列,因此可以用单一切片直接拷贝。
             self.input_ids.gpu[:num_common_tokens].copy_(
                 self.input_batch.prev_sampled_token_ids[:num_common_tokens, 0],
                 non_blocking=True,
             )
             return
-        # Upload the index tensors asynchronously so the scatter can be non-blocking.
+        # 异步上传索引张量,使 scatter 可以非阻塞。
         sampled_tokens_index_tensor = torch.tensor(
             sample_flattened_indices, dtype=torch.int64, pin_memory=PIN_MEMORY
         ).to(self.device, non_blocking=True)
         prev_common_req_indices_tensor = torch.tensor(
             prev_indices, dtype=torch.int64, pin_memory=PIN_MEMORY
         ).to(self.device, non_blocking=True)
+        # 将上一轮的采样 token 散写到 input_ids 的对应位置。
         self.input_ids.gpu.scatter_(
             dim=0,
             index=sampled_tokens_index_tensor,
@@ -1899,28 +2355,33 @@ class GPUModelRunner(
             ],
         )
 
-        # Scatter the draft tokens after the sampled tokens are scattered.
+        # 在采样 token 散写完成后再散写草稿 token。
         if self._draft_token_ids is None or not spec_flattened_indices:
             return
 
+        # 断言草稿 token ID 为张量类型。
         assert isinstance(self._draft_token_ids, torch.Tensor)
+        # 异步上传草稿 token 的目标索引张量。
         draft_tokens_index_tensor = torch.tensor(
             spec_flattened_indices, dtype=torch.int64, pin_memory=PIN_MEMORY
         ).to(self.device, non_blocking=True)
+        # 异步上传草稿 token 的源索引张量。
         prev_draft_token_indices_tensor = torch.tensor(
             prev_draft_token_indices, dtype=torch.int64, pin_memory=PIN_MEMORY
         ).to(self.device, non_blocking=True)
 
-        # because input_ids dtype is torch.int32,
-        # so convert draft_token_ids to torch.int32 here.
+        # 因为 input_ids 的 dtype 是 torch.int32,
+        # 所以这里把 draft_token_ids 转换为 torch.int32。
         draft_token_ids = self._draft_token_ids.to(dtype=torch.int32)
 
+        # 将草稿 token 散写到 input_ids 的对应位置。
         self.input_ids.gpu.scatter_(
             dim=0,
             index=draft_tokens_index_tensor,
             src=draft_token_ids.flatten()[prev_draft_token_indices_tensor],
         )
 
+    # 计算编码器序列长度张量(交叉注意力场景)。
     def _get_encoder_seq_lens(
         self,
         num_scheduled_tokens: dict[str, int],
@@ -1928,31 +2389,33 @@ class GPUModelRunner(
         num_reqs: int,
         for_cudagraph_capture: bool = False,
     ) -> tuple[torch.Tensor | None, np.ndarray | None]:
+        # 非交叉注意力 KV 规格时无需编码器长度。
         if not isinstance(kv_cache_spec, CrossAttentionSpec):
             return None, None
 
-        # Zero out buffer for padding requests that are not actually scheduled (CGs)
+        # 为未实际调度的填充请求清零缓冲区(CUDA 图场景)。
         self.encoder_seq_lens.np[:num_reqs] = 0
 
-        # Build encoder_seq_lens array mapping request indices to
-        # encoder lengths for inputs scheduled in this batch
+        # 构建 encoder_seq_lens 数组:请求索引 -> 本批次已调度输入的编码器长度。
         for req_id in num_scheduled_tokens:
+            # 获取请求索引与缓存状态。
             req_index = self.input_batch.req_id_to_index[req_id]
             req_state = self.requests[req_id]
             if req_state.mm_features is None:
+                # 无多模态特征时编码器长度为 0。
                 self.encoder_seq_lens.np[req_index] = 0
                 continue
 
-            # Get the total number of encoder input tokens for running encoder requests
-            # whether encoding is finished or not so that cross-attention knows how
-            # many encoder tokens to attend to.
+            # 获取运行中编码器请求的编码器输入 token 总数——
+            # 无论编码是否完成都计入,以便交叉注意力知道要关注多少编码器 token。
             encoder_input_tokens = sum(
                 feature.mm_position.length for feature in req_state.mm_features
             )
+            # 写入编码器长度。
             self.encoder_seq_lens.np[req_index] = encoder_input_tokens
         if for_cudagraph_capture:
-            # During CUDA graph capture, we need to use realistic encoder lengths
-            # so that max_seqlen_k is captured with the correct value.
+            # CUDA 图捕获期间需要使用真实的编码器长度,
+            # 以便 max_seqlen_k 以正确的值被捕获。
             max_encoder_len = getattr(
                 self.model_config.hf_config,
                 "max_source_positions",
@@ -1960,12 +2423,15 @@ class GPUModelRunner(
             )
             self.encoder_seq_lens.np[:num_reqs] = max_encoder_len
 
+        # 将编码器长度拷贝到 GPU。
         self.encoder_seq_lens.copy_to_gpu(num_reqs)
         encoder_seq_lens = self.encoder_seq_lens.gpu[:num_reqs]
         encoder_seq_lens_cpu = self.encoder_seq_lens.np[:num_reqs]
 
+        # 返回 GPU 与 CPU 两侧的编码器长度。
         return encoder_seq_lens, encoder_seq_lens_cpu
 
+    # 为模型前向准备输入张量。
     def _prepare_inputs(
         self,
         scheduler_output: "SchedulerOutput",
@@ -1975,20 +2441,22 @@ class GPUModelRunner(
         SpecDecodeMetadata | None,
     ]:
         """
-        Returns:
+        返回:
             tuple[logits_indices, spec_decode_metadata]
         """
+        # 本步调度的 token 总数。
         total_num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
         assert total_num_scheduled_tokens > 0
+        # 持久批次中的请求数。
         num_reqs = self.input_batch.num_reqs
         assert num_reqs > 0
 
-        # OPTIMIZATION: Start copying the block table first.
-        # This way, we can overlap the copy with the following CPU operations.
+        # 优化:先开始拷贝块表。
+        # 这样可以与后续的 CPU 操作重叠执行。
         self.input_batch.block_table.commit_block_table(num_reqs)
 
-        # Get request indices.
-        # E.g., [2, 5, 3] -> [0, 0, 1, 1, 1, 1, 1, 2, 2, 2]
+        # 获取请求索引。
+        # 例如,[2, 5, 3] -> [0, 0, 1, 1, 1, 1, 1, 2, 2, 2]
         req_indices = np.repeat(self.arange_np[:num_reqs], num_scheduled_tokens)
 
         # cu_num_tokens: [2, 5, 3] -> [2, 7, 10]
@@ -1997,34 +2465,34 @@ class GPUModelRunner(
             num_scheduled_tokens, self.query_pos.np
         )
 
-        # Get positions.
+        # 获取各 token 的位置。
         positions_np = (
             self.input_batch.num_computed_tokens_cpu[req_indices]
             + self.query_pos.np[: cu_num_tokens[-1]]
         )
 
-        # Calculate M-RoPE positions.
-        # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
+        # 计算 M-RoPE 位置。
+        # 仅对使用 M-RoPE 的模型有效(例如 Qwen2-VL)
         if self.uses_mrope:
             self._calc_mrope_positions(scheduler_output)
 
-        # Calculate XD-RoPE positions.
-        # Only relevant for models using XD-RoPE (e.g, HunYuan-VL)
+        # 计算 XD-RoPE 位置。
+        # 仅对使用 XD-RoPE 的模型有效(例如 HunYuan-VL)
         if self.uses_xdrope_dim > 0:
             self._calc_xdrope_positions(scheduler_output)
 
-        # Get token indices.
-        # E.g., [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
+        # 获取 token 索引。
+        # 例如,[0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
         # -> [0, 1, M, M + 1, M + 2, M + 3, M + 4, 2 * M, 2 * M + 1, 2 * M + 2]
-        # where M is the max_model_len.
+        # 其中 M 是 max_model_len。
         token_indices = (
             positions_np + req_indices * self.input_batch.token_ids_cpu.shape[1]
         )
+        # 转换为 torch 张量以供索引选择使用。
         token_indices_tensor = torch.from_numpy(token_indices)
 
-        # NOTE(woosuk): We use torch.index_select instead of np.take here
-        # because torch.index_select is much faster than np.take for large
-        # tensors.
+        # 注意(woosuk): 这里用 torch.index_select 而不是 np.take,
+        # 因为对大张量而言 torch.index_select 比 np.take 快得多。
         torch.index_select(
             self.input_batch.token_ids_cpu_tensor.flatten(),
             0,
@@ -2032,6 +2500,7 @@ class GPUModelRunner(
             out=self.input_ids.cpu[:total_num_scheduled_tokens],
         )
         if self.enable_prompt_embeds:
+            # 启用提示词嵌入时,同步选取 token 标记位。
             is_token_ids = self.input_batch.is_token_ids_tensor.flatten()
             torch.index_select(
                 is_token_ids,
@@ -2040,33 +2509,35 @@ class GPUModelRunner(
                 out=self.is_token_ids.cpu[:total_num_scheduled_tokens],
             )
 
-        # Because we did not pre-allocate a massive prompt_embeds CPU tensor on
-        # the InputBatch, we need to fill in the prompt embeds into the expected
-        # spots in the GpuModelRunner's pre-allocated prompt_embeds tensor.
+        # 因为没有在 InputBatch 上预分配巨大的 prompt_embeds CPU 张量,
+        # 所以需要把提示词嵌入填充到 GpuModelRunner 预分配张量的对应位置。
         if self.input_batch.req_prompt_embeds:
+            # 输出的起始索引。
             output_idx = 0
             for req_idx in range(num_reqs):
+                # 该请求调度的 token 数。
                 num_sched = num_scheduled_tokens[req_idx]
 
-                # Skip if this request doesn't have embeddings
+                # 若该请求没有嵌入则跳过。
                 if req_idx not in self.input_batch.req_prompt_embeds:
                     output_idx += num_sched
                     continue
 
-                # Skip if no tokens scheduled
+                # 若该请求没有调度任何 token 则跳过。
                 if num_sched <= 0:
                     output_idx += num_sched
                     continue
 
+                # 取出该请求的嵌入及已计算位置。
                 req_embeds = self.input_batch.req_prompt_embeds[req_idx]
                 start_pos = self.input_batch.num_computed_tokens_cpu[req_idx]
 
-                # Skip if trying to read beyond available embeddings
+                # 若读取位置超出可用嵌入则跳过。
                 if start_pos >= req_embeds.shape[0]:
                     output_idx += num_sched
                     continue
 
-                # Copy available embeddings
+                # 拷贝可用的嵌入。
                 end_pos = start_pos + num_sched
                 actual_end = min(end_pos, req_embeds.shape[0])
                 actual_num_sched = actual_end - start_pos
@@ -2076,54 +2547,58 @@ class GPUModelRunner(
                         output_idx : output_idx + actual_num_sched
                     ].copy_(req_embeds[start_pos:actual_end])
 
+                # 推进输出索引。
                 output_idx += num_sched
 
-        # Prepare the attention metadata.
+        # 准备注意力元数据。
         self.query_start_loc.np[0] = 0
         self.query_start_loc.np[1 : num_reqs + 1] = cu_num_tokens
-        # Note: pad query_start_loc to be non-decreasing, as kernels
-        # like FlashAttention requires that
+        # 注意: 将 query_start_loc 填充为非递减,因为 FlashAttention 等
+        # 内核要求如此
         self.query_start_loc.np[num_reqs + 1 :].fill(cu_num_tokens[-1])
         self.query_start_loc.copy_to_gpu()
         query_start_loc = self.query_start_loc.gpu[: num_reqs + 1]
 
-        # Compute optimistic seq_lens (assumes all draft tokens from previous
-        # iteration accepted). Store in optimistic_seq_lens_cpu for use by
-        # _build_attention_metadata (max_seq_len) and discard_request_mask.
-        # seq_lens (GPU) will be computed later using the same optimistic values.
+        # 计算乐观序列长度(假设上一轮所有草稿 token 都被接受)。
+        # 存入 optimistic_seq_lens_cpu,供 _build_attention_metadata(max_seq_len)
+        # 与 discard_request_mask 使用。
+        # seq_lens(GPU)稍后将使用同样的乐观值计算。
         torch.add(
             self.input_batch.num_computed_tokens_cpu_tensor[:num_reqs],
             torch.from_numpy(num_scheduled_tokens),
             out=self.optimistic_seq_lens_cpu[:num_reqs],
         )
+        # 填充请求位置清零。
         self.optimistic_seq_lens_cpu[num_reqs:].fill_(0)
 
-        # Build prev_positions mapping: current pos -> prev pos (-1 if new).
-        # Used for gathering from previous iteration's GPU tensors.
+        # 构建 prev_positions 映射:当前位置 -> 上一轮位置(新请求为 -1)。
+        # 用于从上一轮的 GPU 张量中收集数据。
         prev_req_id_to_index = self.input_batch.prev_req_id_to_index
         self._compute_prev_positions(num_reqs)
 
+        # 收集每个请求的总 token 数。
         num_tokens = [self.requests[r].num_tokens for r in self.input_batch.req_ids]
         num_tokens_np = np.array(num_tokens, dtype=np.int32)
 
-        # Record which requests should not be sampled,
-        # so that we could clear the sampled tokens before returning
+        # 记录哪些请求不应被采样,
+        # 以便在返回前清除这些请求的采样 token。
         self.discard_request_mask.np[:num_reqs] = (
             self.optimistic_seq_lens_cpu[:num_reqs].numpy() < num_tokens_np
         )
         self.discard_request_mask.copy_to_gpu(num_reqs)
 
-        # Sync num_accepted_tokens from CPU (set by
-        # _update_states_after_model_execute for hybrid models).
-        # Skipped under async scheduling (non-align): the CPU copy races with
-        # the in-flight D2H copy and with input-batch row moves.
+        # 从 CPU 同步接受 token 数(混合模型由 _update_states_after_model_execute
+        # 设置)。异步调度(非 align)下跳过:CPU 副本会与在途 D2H 拷贝及
+        # 批次行移动产生竞争。
         needs_cpu_accepted_counts = self.num_accepted_tokens_event is not None and not (
             self.use_async_scheduling and self.cache_config.mamba_cache_mode != "align"
         )
         if needs_cpu_accepted_counts:
+            # 断言事件已创建。
             assert self.num_accepted_tokens_event is not None
+            # 等待 GPU 拷贝完成。
             self.num_accepted_tokens_event.synchronize()
-            # Async mode: condense() reordered indices, use prev_positions mapping
+            # 异步模式:condense() 重排了索引,需要用 prev_positions 映射。
             if self.use_async_scheduling and prev_req_id_to_index:
                 prev_idx = self.prev_positions.np[:num_reqs]
                 new_mask = prev_idx < 0
@@ -2132,23 +2607,26 @@ class GPUModelRunner(
                         np.where(new_mask, 0, prev_idx)
                     ]
                 )
+                # 新请求填充为 1。
                 self.num_accepted_tokens.np[:num_reqs][new_mask] = 1
                 self.input_batch.num_accepted_tokens_cpu[:num_reqs] = (
                     self.num_accepted_tokens.np[:num_reqs]
                 )
             else:
-                # Non-async mode: use values directly
+                # 非异步模式:直接使用 CPU 值。
                 self.num_accepted_tokens.np[:num_reqs] = (
                     self.input_batch.num_accepted_tokens_cpu[:num_reqs]
                 )
+            # 填充位置填充为 1。
             self.num_accepted_tokens.np[num_reqs:].fill(1)
             self.num_accepted_tokens.copy_to_gpu()
         else:
-            # Default to 1; update_num_computed_tokens_for_batch_change below
-            # corrects rows that had drafts from valid_sampled_token_count.
+            # 默认填 1;下方 update_num_computed_tokens_for_batch_change 会依据
+            # valid_sampled_token_count 修正有草稿的行。
             self.num_accepted_tokens.np.fill(1)
             self.num_accepted_tokens.gpu.fill_(1)
 
+        # mamba prev_last_scheduled_idx 存在时,预处理 mamba all 的投机解码。
         if self.mamba_prev_last_scheduled_idx is not None:
             mamba_utils.preprocess_mamba_all_specdec(
                 scheduler_output,
@@ -2158,20 +2636,22 @@ class GPUModelRunner(
                 self.mamba_prev_last_scheduled_idx,
             )
 
-        # Update num_computed_tokens on GPU. In async spec decode,
-        # CPU values are optimistic (all drafts accepted). The kernel
-        # corrects on GPU using the previous step's
-        # valid_sampled_token_count_gpu. Otherwise, just copy from CPU.
+        # 更新 GPU 上的 num_computed_tokens。异步投机解码下 CPU 值是乐观的
+        # (假设全部草稿被接受),内核会在 GPU 上用上一步的
+        # valid_sampled_token_count_gpu 进行修正。否则直接从 CPU 拷贝。
         if (
             self.use_async_spec_decode
             and self.valid_sampled_token_count_gpu is not None
             and prev_req_id_to_index
         ):
+            # 拷贝位置映射与草稿数量到 GPU。
             self.prev_positions.copy_to_gpu(num_reqs)
             self.prev_num_draft_tokens.copy_to_gpu()
+            # 异步上载 CPU 侧的已计算 token 数。
             cpu_values = self.input_batch.num_computed_tokens_cpu_tensor[:num_reqs].to(
                 device=self.device, non_blocking=True
             )
+            # 用 GPU 内核按批次变化修正已计算 token 数。
             update_num_computed_tokens_for_batch_change(
                 self.num_computed_tokens,
                 self.num_accepted_tokens.gpu[:num_reqs],
@@ -2181,35 +2661,41 @@ class GPUModelRunner(
                 cpu_values,
             )
         else:
+            # 直接异步拷贝 CPU 值到 GPU。
             self.num_computed_tokens[:num_reqs].copy_(
                 self.input_batch.num_computed_tokens_cpu_tensor[:num_reqs],
                 non_blocking=True,
             )
 
+        # 写入请求索引并拷贝到 GPU。
         self.req_indices.np[:total_num_scheduled_tokens] = req_indices
         self.req_indices.copy_to_gpu(total_num_scheduled_tokens)
         req_indices_gpu = self.req_indices.gpu[:total_num_scheduled_tokens]
 
+        # 拷贝查询位置并更新调度数量。
         self.query_pos.copy_to_gpu(total_num_scheduled_tokens)
         self.num_scheduled_tokens.np[:num_reqs] = num_scheduled_tokens
         self.num_scheduled_tokens.copy_to_gpu(num_reqs)
         num_scheduled_tokens_gpu = self.num_scheduled_tokens.gpu[:num_reqs]
+        # 计算各 token 的最终位置(已计算数 + 批内偏移)。
         self.positions[:total_num_scheduled_tokens] = (
             self.num_computed_tokens[req_indices_gpu].to(torch.int64)
             + self.query_pos.gpu[:total_num_scheduled_tokens]
         )
+        # 计算各请求的序列长度并清零填充部分。
         self.seq_lens[:num_reqs] = (
             self.num_computed_tokens[:num_reqs] + num_scheduled_tokens_gpu
         )
         self.seq_lens[num_reqs:].fill_(0)
 
+        # 计算槽位映射。
         self.input_batch.block_table.compute_slot_mapping(
             num_reqs,
             self.query_start_loc.gpu[: num_reqs + 1],
             self.positions[:total_num_scheduled_tokens],
         )
 
-        # Copy the tensors to the GPU.
+        # 将张量拷贝到 GPU。
         self._prepare_input_ids(
             scheduler_output,
             num_reqs,
@@ -2218,78 +2704,86 @@ class GPUModelRunner(
         )
 
         if self.uses_mrope:
-            # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
+            # 仅对使用 M-RoPE 的模型有效(例如 Qwen2-VL)
             self.mrope_positions.gpu[:, :total_num_scheduled_tokens].copy_(
                 self.mrope_positions.cpu[:, :total_num_scheduled_tokens],
                 non_blocking=True,
             )
         elif self.uses_xdrope_dim > 0:
-            # Only relevant for models using XD-RoPE (e.g, HunYuan-VL)
+            # 仅对使用 XD-RoPE 的模型有效(例如 HunYuan-VL)
             self.xdrope_positions.gpu[:, :total_num_scheduled_tokens].copy_(
                 self.xdrope_positions.cpu[:, :total_num_scheduled_tokens],
                 non_blocking=True,
             )
+        # 异步投机解码下修正 M/XD-RoPE 位置的漂移。
         if self.use_async_spec_decode and (self.uses_mrope or self.uses_xdrope_dim > 0):
+            # 计算 GPU 与 CPU 侧已计算 token 数的差值。
             drift = self.num_computed_tokens[req_indices_gpu].to(
                 torch.int64
             ) - self.input_batch.num_computed_tokens_cpu_tensor[req_indices].to(
                 device=self.device, dtype=torch.int64, non_blocking=True
             )
+            # 选择对应的位置张量并累加漂移。
             target = self.mrope_positions if self.uses_mrope else self.xdrope_positions
             target.gpu[:, :total_num_scheduled_tokens] += drift
 
+        # 判断是否使用投机解码。
         use_spec_decode = len(scheduler_output.scheduled_spec_decode_tokens) > 0
         if not use_spec_decode:
-            # NOTE(woosuk): Due to chunked prefills, the batch may contain
-            # partial requests. While we should not sample any token
-            # from these partial requests, we do so for simplicity.
-            # We will ignore the sampled tokens from the partial requests.
-            # TODO: Support prompt logprobs.
+            # 注意(woosuk): 由于分块 prefill,批次中可能包含部分请求。虽然不应从
+            # 这些部分请求中采样 token,但为简单起见我们仍然采样,之后忽略来自
+            # 部分请求的采样 token。
+            # TODO: 支持 prompt logprobs。
             logits_indices = query_start_loc[1:] - 1
             spec_decode_metadata = None
             num_sampled_tokens = np.ones(num_reqs, dtype=np.int32)
         else:
-            # Get the number of draft tokens for each request.
-            # Iterate over the dictionary rather than all requests since not all
-            # requests have draft tokens.
+            # 获取每个请求的草稿 token 数。
+            # 遍历字典而非全部请求,因为并非所有请求都有草稿 token。
             num_draft_tokens = np.zeros(num_reqs, dtype=np.int32)
-            # For chunked prefills, use -1 as mask rather than 0, as guided
-            # decoding may rollback speculative tokens.
+            # 对分块 prefill 使用 -1 而非 0 作为掩码,因为引导解码可能回滚投机 token。
             num_decode_draft_tokens = np.full(num_reqs, -1, dtype=np.int32)
             for (
                 req_id,
                 draft_token_ids,
             ) in scheduler_output.scheduled_spec_decode_tokens.items():
+                # 获取请求索引与草稿长度。
                 req_idx = self.input_batch.req_id_to_index[req_id]
                 draft_len = len(draft_token_ids)
                 num_draft_tokens[req_idx] = draft_len
+                # 纯 decode 请求(调度数 = 草稿数 + 1)单独记录。
                 if num_scheduled_tokens[req_idx] == draft_len + 1:
                     num_decode_draft_tokens[req_idx] = draft_len
+            # 计算投机解码元数据。
             spec_decode_metadata = self._calc_spec_decode_metadata(
                 num_draft_tokens, cu_num_tokens
             )
             logits_indices = spec_decode_metadata.logits_indices
             num_sampled_tokens = num_draft_tokens + 1
-            # For DECODE only cuda graph of some attention backends (e.g., GDN).
+            # 供部分注意力后端(如 GDN)的仅 decode CUDA 图使用。
             self.num_decode_draft_tokens.np[:num_reqs] = num_decode_draft_tokens
             self.num_decode_draft_tokens.np[num_reqs:].fill(-1)
             self.num_decode_draft_tokens.copy_to_gpu()
 
-        # Hot-Swap lora model
+        # LoRA 热交换模型
         if self.lora_config:
+            # 断言采样 token 总数不超过最大批处理 token 数。
             assert (
                 np.sum(num_sampled_tokens)
                 <= self.vllm_config.scheduler_config.max_num_batched_tokens
             )
+            # 设置当前激活的 LoRA。
             self.set_active_loras(
                 self.input_batch, num_scheduled_tokens, num_sampled_tokens
             )
 
+        # 返回 logits 索引与投机解码元数据。
         return (
             logits_indices,
             spec_decode_metadata,
         )
 
+    # 为所有注意力层构建元数据。
     def _build_attention_metadata(
         self,
         num_tokens: int,
@@ -2306,65 +2800,74 @@ class GPUModelRunner(
         slot_mappings: dict[int, torch.Tensor] | None = None,
     ) -> tuple[PerLayerAttnMetadata, CommonAttentionMetadata | None]:
         """
-        Returns:
+        返回:
             tuple[attn_metadata, spec_decode_common_attn_metadata]
         """
-        # Attention metadata is not needed for attention free models
+        # 无注意力模型不需要注意力元数据
         if len(self.kv_cache_config.kv_cache_groups) == 0:
             return {}, None
 
+        # 未提供填充数量时使用实际数量。
         num_tokens_padded = num_tokens_padded or num_tokens
         num_reqs_padded = num_reqs_padded or num_reqs
         assert num_reqs_padded is not None and num_tokens_padded is not None
 
+        # 每层注意力元数据字典。
         attn_metadata: PerLayerAttnMetadata = {}
+        # 存在微批切片时,为每个微批创建一个字典。
         if ubatch_slices is not None:
             attn_metadata = [dict() for _ in range(len(ubatch_slices))]
 
         if for_cudagraph_capture:
-            # For some attention backends (e.g. FA) with sliding window models we need
-            # to make sure the backend see a max_seq_len that is larger to the sliding
-            # window size when capturing to make sure the correct kernel is selected.
+            # 对某些带滑动窗口模型的注意力后端(如 FA),捕获时需要确保后端看到的
+            # max_seq_len 不小于滑动窗口大小,以便选择正确的内核。
             max_seq_len = self.max_model_len
         else:
+            # 取乐观序列长度的最大值。
             max_seq_len = self.optimistic_seq_lens_cpu.numpy()[:num_reqs].max().item()
 
+        # 获取 KV cache 组列表。
         kv_cache_groups = self.kv_cache_config.kv_cache_groups
 
+        # 内部函数:获取指定 KV 组的块表张量。
         def _get_block_table(kv_cache_gid: int):
             assert num_reqs_padded is not None and num_tokens_padded is not None
             kv_cache_spec = kv_cache_groups[kv_cache_gid].kv_cache_spec
             if isinstance(kv_cache_spec, EncoderOnlyAttentionSpec):
+                # 仅编码器注意力使用全零块表。
                 blk_table_tensor = torch.zeros(
                     (num_reqs_padded, 1),
                     dtype=torch.int32,
                     device=self.device,
                 )
             else:
+                # 获取设备侧块表张量。
                 blk_table = self.input_batch.block_table[kv_cache_gid]
                 blk_table_tensor = blk_table.get_device_tensor(num_reqs_padded)
 
-            # Fill unused block table entries with NULL_BLOCK_ID (null block)
-            # for CUDAGraph padding. Block 0 is reserved for padding.
+            # 用 NULL_BLOCK_ID(空块)填充未使用的块表条目,以支持 CUDAGraph 填充。
+            # 块 0 预留给填充。
             blk_table_tensor[num_reqs:num_reqs_padded].fill_(NULL_BLOCK_ID)
             return blk_table_tensor
 
+        # 断言槽位映射已提供。
         assert slot_mappings is not None
+        # 获取第 0 组的块表与槽位映射。
         block_table_gid_0 = _get_block_table(0)
         slot_mapping_gid_0 = slot_mappings[0]
 
+        # 路由专家已初始化时,快照本步的槽位映射到私有设备缓冲区。
         if self.routed_experts_initialized:
-            # Copy this step's attention slot_mapping into our private
-            # device buffer. The shared ``slot_mappings[attn_gid]`` is
-            # owned by the attention block table and will be overwritten
-            # by the next ``_prepare_inputs``; we need a stable snapshot
-            # because the async D2H may still be in flight on the copy
-            # stream when the next step runs.
+            # 将本步的注意力 slot_mapping 拷贝到私有设备缓冲区。共享的
+            # ``slot_mappings[attn_gid]`` 由注意力块表持有,并会被下一次
+            # ``_prepare_inputs`` 覆盖;我们需要一个稳定的快照,因为异步 D2H
+            # 拷贝可能仍在下一步运行时于拷贝流上处于在途状态。
             slot_mapping_attn = slot_mappings[self.routed_experts_capturer.attn_gid]
             self.routed_experts_slot_mapping_device[:num_tokens].copy_(
                 slot_mapping_attn[:num_tokens]
             )
 
+        # 获取 CPU 侧的各计数张量切片。
         num_computed_tokens_cpu = self.input_batch.num_computed_tokens_cpu_tensor[
             :num_reqs_padded
         ]
@@ -2374,40 +2877,40 @@ class GPUModelRunner(
         seq_lens_cpu = self.optimistic_seq_lens_cpu[:num_reqs_padded]
         seq_lens_cpu_upper_bound = seq_lens_cpu
 
-        # is_prefilling: True if request is still in prefill phase.
-        # Used by mamba backends to distinguish actual decodes from
-        # short extends.
+        # is_prefilling: 请求是否仍处于 prefill 阶段。
+        # 供 mamba 后端区分真正的 decode 与短 extend。
         is_prefilling = num_computed_tokens_cpu < num_prompt_tokens_cpu
-        # Zero out padded rows so stale data from condense() doesn't
-        # misclassify padding as prefill in CUDA graph mode.
+        # 填充行清零,防止 condense() 的旧数据在 CUDA 图模式下把填充误判为 prefill。
         is_prefilling[num_reqs:] = False
 
         if self.use_async_spec_decode:
-            # GPU tensors are authoritative in async mode.
+            # 异步模式下以 GPU 张量为准。
             seq_lens_cpu = None
             num_computed_tokens_cpu = None
 
-        # Compute mm_prefix bidirectional ranges before building
-        # attention metadata so builders handle them during build().
-        # By default, ranges exceeding sliding_window are skipped to prevent
-        # early tokens from attending across the entire image span. Models that
-        # clamp mm_prefix to the sliding window *in-kernel* (e.g. Gemma4, which
-        # needs HF's (causal OR blockwise) AND sliding_window on sliding layers)
-        # opt out of the skip so the bidirectional range survives for images
-        # larger than the window; the kernel then bounds it per-query.
+        # 在构建注意力元数据之前计算 mm_prefix 双向区间,使构建器可以在 build()
+        # 中处理它们。默认跳过超出 sliding_window 的区间,防止较早的 token 跨
+        # 整张图像进行注意力。在内核内将 mm_prefix 限制到滑动窗口的模型
+        # (如 Gemma4——它需要在滑动层上同时满足 HF 的 (causal OR blockwise) AND
+        # sliding_window)选择不跳过,以便大于窗口的图像保留双向区间;随后由内核
+        # 按查询逐个界定。
         req_doc_ranges: dict[int, list[tuple[int, int]]] | None = None
         if self.is_mm_prefix_lm:
             req_doc_ranges = {}
             hf_text_config = self.model_config.hf_text_config
+            # 获取滑动窗口大小。
             _bidi_sw = getattr(hf_text_config, "sliding_window", None)
+            # 判断模型是否在内核中执行限制。
             _clamps_in_kernel = getattr(
                 self.model, "mm_prefix_clamp_sliding_window", False
             )
             for req_id in self.input_batch.req_ids:
+                # 该请求的图像文档区间列表。
                 image_doc_ranges = []
                 req_state = self.requests[req_id]
                 for mm_feature in req_state.mm_features:
                     if mm_feature.modality == "audio":
+                        # 音频模态跳过。
                         continue
                     pos_info = mm_feature.mm_position
                     img_doc_range = pos_info.extract_embeds_range()
@@ -2417,24 +2920,26 @@ class GPUModelRunner(
                             and _bidi_sw is not None
                             and (r[1] - r[0] + 1) > _bidi_sw
                         ):
+                            # 超出滑动窗口且内核不处理时跳过。
                             continue
                         image_doc_ranges.append(r)
                 req_idx = self.input_batch.req_id_to_index[req_id]
                 req_doc_ranges[req_idx] = image_doc_ranges
 
-        # Reference Sliding Window Attention (R-SWA): pass per-request prompt
-        # lengths so the attention backend can keep the prefix globally visible.
-        # The backend owns the persistent CUDA-graph-safe GPU buffer.
+        # 参考滑动窗口注意力(R-SWA):传递每请求的 prompt 长度,使注意力后端
+        # 能保持前缀全局可见。后端拥有持久且 CUDA 图安全的 GPU 缓冲区。
         rswa_prefix_lens = None
         if self.model_config.rswa_window is not None:
             rswa_prefix_lens = num_prompt_tokens_cpu
 
+        # replayssm 模式的 decode 基址 CPU 张量。
         replayssm_decode_base_cpu = None
         if self.cache_config.use_replayssm:
             replayssm_decode_base_cpu = (
                 self.input_batch.replayssm_decode_base_cpu_tensor[:num_reqs_padded]
             )
 
+        # 构建公共注意力元数据对象。
         cm_base = CommonAttentionMetadata(
             query_start_loc=self.query_start_loc.gpu[: num_reqs_padded + 1],
             query_start_loc_cpu=self.query_start_loc.cpu[: num_reqs_padded + 1],
@@ -2456,6 +2961,7 @@ class GPUModelRunner(
             rswa_prefix_lens=rswa_prefix_lens,
         )
 
+        # DCP 世界规模大于 1 时计算本地序列长度。
         if self.dcp_world_size > 1:
             self.dcp_local_seq_lens.cpu[:num_reqs] = get_dcp_local_seq_lens(
                 self.optimistic_seq_lens_cpu[:num_reqs],
@@ -2466,45 +2972,51 @@ class GPUModelRunner(
             self.dcp_local_seq_lens.cpu[num_reqs:].fill_(0)
             self.dcp_local_seq_lens.copy_to_gpu(num_reqs_padded)
 
+            # 将 DCP 本地序列长度写入公共元数据。
             cm_base.dcp_local_seq_lens = self.dcp_local_seq_lens.gpu[:num_reqs_padded]
             cm_base.dcp_local_seq_lens_cpu = self.dcp_local_seq_lens.cpu[
                 :num_reqs_padded
             ]
 
+        # KV 共享快速 prefill 模式下记录 logits 索引。
         if logits_indices is not None and self.cache_config.kv_sharing_fast_prefill:
             cm_base.num_logits_indices = logits_indices.size(0)
             cm_base.logits_indices_padded = self._prepare_kv_sharing_fast_prefill(
                 logits_indices
             )
 
-        # Cache attention metadata builds across hybrid KV-cache groups
-        # The only thing that changes between different hybrid KV-cache groups when the
-        # same metadata builder and KVCacheSpec is the same is the block table, so we
-        # can cache the attention metadata builds and just update the block table using
-        # `builder.update_block_table` if the builder supports it.
+        # 在混合 KV cache 组之间缓存注意力元数据的构建结果。
+        # 当相同的元数据构建器和 KVCacheSpec 跨不同混合组复用时,唯一变化的是块表,
+        # 因此可以缓存构建结果,并在构建器支持时用 `builder.update_block_table`
+        # 仅更新块表。
         cached_attn_metadata: dict[
             tuple[KVCacheSpec, type[AttentionMetadataBuilder]], AttentionMetadata
         ] = {}
 
+        # 内部函数:为指定注意力组构建元数据。
         def _build_attn_group_metadata(
             kv_cache_gid: int,
             attn_gid: int,
             common_attn_metadata: CommonAttentionMetadata,
             ubid: int | None = None,
         ) -> None:
+            # 获取注意力组及其元数据构建器。
             attn_group = self.attn_groups[kv_cache_gid][attn_gid]
             builder = attn_group.get_metadata_builder(ubid or 0)
             kv_cache_spec = kv_cache_groups[kv_cache_gid].kv_cache_spec
             if isinstance(kv_cache_spec, UniformTypeKVCacheSpecs):
                 kv_cache_spec = kv_cache_spec.kv_cache_specs[attn_group.layer_names[0]]
+            # 构建缓存键。
             cache_key = (kv_cache_spec, type(builder))
 
+            # 获取级联注意力的前缀长度。
             cascade_attn_prefix_len = (
                 cascade_attn_prefix_lens[kv_cache_gid][attn_gid]
                 if cascade_attn_prefix_lens
                 else 0
             )
 
+            # 额外的元数据构建参数。
             extra_attn_metadata_args = {}
             if use_spec_decode and isinstance(
                 builder,
@@ -2531,6 +3043,7 @@ class GPUModelRunner(
                         self.mamba_prev_last_scheduled_idx.gpu[:num_reqs_padded]
                     )
 
+            # CUDA 图捕获时使用专用构建。
             if for_cudagraph_capture:
                 attn_metadata_i = builder.build_for_cudagraph_capture(
                     common_attn_metadata
@@ -2539,20 +3052,24 @@ class GPUModelRunner(
                 cache_key in cached_attn_metadata
                 and builder.supports_update_block_table
             ):
+                # 缓存命中时仅更新块表。
                 attn_metadata_i = builder.update_block_table(
                     cached_attn_metadata[cache_key],
                     common_attn_metadata.block_table_tensor,
                     common_attn_metadata.slot_mapping,
                 )
             else:
+                # 正常构建元数据。
                 attn_metadata_i = builder.build(
                     common_prefix_len=cascade_attn_prefix_len,
                     common_attn_metadata=common_attn_metadata,
                     **extra_attn_metadata_args,
                 )
+                # 支持更新块表时缓存构建结果。
                 if builder.supports_update_block_table:
                     cached_attn_metadata[cache_key] = attn_metadata_i
 
+            # 依据是否微批选择目标字典。
             if ubid is None:
                 assert isinstance(attn_metadata, dict)
                 attn_metadata_dict = attn_metadata
@@ -2560,17 +3077,17 @@ class GPUModelRunner(
                 assert isinstance(attn_metadata, list)
                 attn_metadata_dict = attn_metadata[ubid]
 
+            # 同组的所有层共享同一份元数据。
             for layer_name in attn_group.layer_names:
                 attn_metadata_dict[layer_name] = attn_metadata_i
 
-        # Prepare the attention metadata for each KV cache group and make layers
-        # in the same group share the same metadata.
+        # 为每个 KV cache 组准备注意力元数据,并让同组内的层共享同一份元数据。
         spec_decode_common_attn_metadata = None
         for kv_cache_gid, kv_cache_group in enumerate(kv_cache_groups):
-            cm = copy(cm_base)  # shallow copy
+            # 浅拷贝公共元数据。
+            cm = copy(cm_base)  # 浅拷贝
 
-            # Basically only the encoder seq_lens, block_table and slot_mapping change
-            # for each kv_cache_group.
+            # 对每个 kv_cache_group,基本上只有编码器 seq_lens、块表和槽位映射会变化。
             cm.encoder_seq_lens, cm.encoder_seq_lens_cpu = self._get_encoder_seq_lens(
                 num_scheduled_tokens or {},
                 kv_cache_group.kv_cache_spec,
@@ -2578,9 +3095,11 @@ class GPUModelRunner(
                 for_cudagraph_capture=for_cudagraph_capture,
             )
             if kv_cache_gid > 0:
+                # 非 0 组使用各自的块表与槽位映射。
                 cm.block_table_tensor = _get_block_table(kv_cache_gid)
                 cm.slot_mapping = slot_mappings[kv_cache_gid]
 
+            # 投机解码时保存第一份公共注意力元数据供 drafter 使用。
             if self.speculative_config and spec_decode_common_attn_metadata is None:
                 if isinstance(
                     self.drafter,
@@ -2591,11 +3110,12 @@ class GPUModelRunner(
                         ExtractHiddenStatesProposer,
                     ),
                 ):
+                    # 仅当 drafter 的 KV 组匹配时保存。
                     if self.drafter.kv_cache_gid == kv_cache_gid:
                         spec_decode_common_attn_metadata = cm
                 else:
                     spec_decode_common_attn_metadata = cm
-            # Capture per-group block tables for multi-group proposers.
+            # 为多组提议者捕获每组块表。
             if self.speculative_config and isinstance(self.drafter, Step3p5MTPProposer):
                 self.drafter.set_per_group_attn_metadata(
                     kv_cache_gid, cm.block_table_tensor, cm.slot_mapping
@@ -2605,26 +3125,29 @@ class GPUModelRunner(
                     kv_cache_gid, cm.block_table_tensor
                 )
 
+            # 为组内每个注意力组构建元数据。
             for attn_gid in range(len(self.attn_groups[kv_cache_gid])):
                 if ubatch_slices is not None:
+                    # 微批切片时逐个构建。
                     for ubid, _cm in enumerate(split_attn_metadata(ubatch_slices, cm)):
                         _build_attn_group_metadata(kv_cache_gid, attn_gid, _cm, ubid)
 
                 else:
                     _build_attn_group_metadata(kv_cache_gid, attn_gid, cm)
 
+        # 投机解码且发生了填充时,去除填充(drafter 目前仍只使用分块 CUDA 图并
+        # 直接修改注意力元数据,因此不想使用带填充的元数据)。
         if spec_decode_common_attn_metadata is not None and (
             num_reqs != num_reqs_padded or num_tokens != num_tokens_padded
         ):
-            # Currently the drafter still only uses piecewise cudagraphs (and modifies
-            # the attention metadata in directly), and therefore does not want to use
-            # padded attention metadata.
             spec_decode_common_attn_metadata = (
                 spec_decode_common_attn_metadata.unpadded(num_tokens, num_reqs)
             )
 
+        # 返回注意力元数据与投机解码公共元数据。
         return attn_metadata, spec_decode_common_attn_metadata
 
+    # 计算每个 KV 组、每个注意力组的级联注意力前缀长度。
     def _compute_cascade_attn_prefix_lens(
         self,
         num_scheduled_tokens: np.ndarray,
@@ -2632,25 +3155,30 @@ class GPUModelRunner(
         num_common_prefix_blocks: list[int],
     ) -> list[list[int]] | None:
         """
-        Returns:
+        返回:
             Optional[cascade_attn_prefix_lens]
-                cascade_attn_prefix_lens is 2D:
+                cascade_attn_prefix_lens 是二维的:
                 ``[kv_cache_group_id][attn_group_idx]``,
-                None if we should not use cascade attention
+                若不应使用级联注意力则为 None
         """
 
+        # 是否使用了级联注意力。
         use_cascade_attn = False
+        # KV cache 组数量。
         num_kv_cache_groups = len(self.kv_cache_config.kv_cache_groups)
+        # 为每个 KV 组初始化前缀长度列表。
         cascade_attn_prefix_lens: list[list[int]] = [
             [] for _ in range(num_kv_cache_groups)
         ]
 
+        # 遍历每个 KV 组中的注意力组。
         for kv_cache_gid in range(num_kv_cache_groups):
             for attn_group in self.attn_groups[kv_cache_gid]:
                 if isinstance(attn_group.kv_cache_spec, EncoderOnlyAttentionSpec):
+                    # 仅编码器注意力不使用级联。
                     cascade_attn_prefix_len = 0
                 else:
-                    # 0 if cascade attention should not be used
+                    # 不应使用级联注意力时为 0
                     cascade_attn_prefix_len = self._compute_cascade_attn_prefix_len(
                         num_scheduled_tokens,
                         num_computed_tokens,
@@ -2658,11 +3186,15 @@ class GPUModelRunner(
                         attn_group.kv_cache_spec,
                         attn_group.get_metadata_builder(),
                     )
+                # 记录该注意力组的前缀长度。
                 cascade_attn_prefix_lens[kv_cache_gid].append(cascade_attn_prefix_len)
+                # 更新是否使用了级联注意力。
                 use_cascade_attn |= cascade_attn_prefix_len > 0
 
+        # 使用级联时返回前缀长度矩阵,否则返回 None。
         return cascade_attn_prefix_lens if use_cascade_attn else None
 
+    # 计算级联注意力的公共前缀长度。
     def _compute_cascade_attn_prefix_len(
         self,
         num_scheduled_tokens: np.ndarray,
@@ -2671,82 +3203,74 @@ class GPUModelRunner(
         kv_cache_spec: KVCacheSpec,
         attn_metadata_builder: AttentionMetadataBuilder,
     ) -> int:
-        """Compute the length of the common prefix for cascade attention.
+        """计算级联注意力的公共前缀长度。
 
-        NOTE(woosuk): The common prefix length returned by this function
-        represents the length used specifically for cascade attention, not the
-        actual number of tokens shared between requests. When cascade attention
-        is disabled (use_cascade=False), this function returns 0 even if
-        requests share common tokens. Additionally, the common prefix length is
-        truncated to a multiple of the block size and may be further truncated
-        due to implementation details explained below.
+        注意(woosuk): 本函数返回的公共前缀长度专门用于级联注意力,而非请求间
+        实际共享的 token 数。当级联注意力被禁用(use_cascade=False)时,即使请求
+        共享公共 token,本函数也返回 0。此外,公共前缀长度会被截断为块大小的
+        整数倍,并可能因下面说明的实现细节被进一步截断。
 
         Args:
-            num_scheduled_tokens: Number of tokens scheduled per request.
-            num_common_prefix_blocks: Number of shared KV cache blocks.
+            num_scheduled_tokens: 每个请求调度的 token 数。
+            num_common_prefix_blocks: 共享的 KV cache 块数量。
 
         Returns:
-            int: Length of common prefix in tokens.
+            int: 以 token 计的公共前缀长度。
         """
 
+        # 初始公共前缀长度 = 共享块数 × 块大小。
         common_prefix_len = num_common_prefix_blocks * kv_cache_spec.block_size
         if common_prefix_len == 0:
-            # Common case.
+            # 常见情形。
             return 0
 
-        # NOTE(woosuk): Cascade attention uses two attention kernels: one
-        # for the common prefix and the other for the rest. For the first
-        # kernel, we concatenate all the query tokens (possibly from
-        # different requests) and treat them as if they are from the same
-        # request. Then, we use bi-directional attention to process the
-        # common prefix in the KV cache. Importantly, this means that the
-        # first kernel does not do any masking.
+        # 注意(woosuk): 级联注意力使用两个注意力内核:一个处理公共前缀,
+        # 另一个处理其余部分。对第一个内核,我们把所有查询 token(可能来自
+        # 不同请求)拼接起来,当作来自同一请求处理。然后用双向注意力处理
+        # KV cache 中的公共前缀。重要的是,这意味着第一个内核不做任何掩码。
 
-        # Consider the following example:
-        # Request 1's input query: [D, E, X]
-        # Request 1's kv cache: [A, B, C, D, E, X]
-        # Request 1's num_computed_tokens: 3 (i.e., [A, B, C])
-        # Request 2's input query: [E, Y]
-        # Request 2's kv cache: [A, B, C, D, E, Y]
-        # Request 2's num_computed_tokens: 4 (i.e., [A, B, C, D])
+        # 考虑如下示例:
+        # 请求 1 的输入查询: [D, E, X]
+        # 请求 1 的 kv cache: [A, B, C, D, E, X]
+        # 请求 1 的 num_computed_tokens: 3(即 [A, B, C])
+        # 请求 2 的输入查询: [E, Y]
+        # 请求 2 的 kv cache: [A, B, C, D, E, Y]
+        # 请求 2 的 num_computed_tokens: 4(即 [A, B, C, D])
 
-        # If we use [A, B, C, D, E] as the common prefix, then the
-        # first kernel will compute the bi-directional attention between
-        # input query [D, E, X, E, Y] and common prefix [A, B, C, D, E].
-        # However, this is wrong because D in Request 1 should not attend to
-        # E in the common prefix (i.e., we need masking).
-        # To avoid this, [A, B, C, D] should be the common prefix.
-        # That is, the common prefix should be capped by the minimum
-        # num_computed_tokens among the requests, and plus one to include
-        # the first token of the query.
+        # 若用 [A, B, C, D, E] 作为公共前缀,则第一个内核会计算输入查询
+        # [D, E, X, E, Y] 与公共前缀 [A, B, C, D, E] 之间的双向注意力。
+        # 但这是错的,因为请求 1 中的 D 不应关注公共前缀中的 E(即需要掩码)。
+        # 为避免这一点,应以 [A, B, C, D] 作为公共前缀。
+        # 也就是说,公共前缀应被各请求中最小的 num_computed_tokens 截断,
+        # 再加一以包含查询的第一个 token。
 
-        # In practice, we use [A, B, C] as the common prefix, instead of
-        # [A, B, C, D] (i.e., the common prefix is capped by the minimum
-        # num_computed_tokens, without plus one).
-        # This is because of an implementation detail: We want to always
-        # use two kernels for cascade attention. Let's imagine:
-        # Request 3's input query: [D]
-        # Request 3's kv cache: [A, B, C, D]
-        # Request 3's num_computed_tokens: 3 (i.e., [A, B, C])
-        # If we use [A, B, C, D] as the common prefix for Request 1-3,
-        # then Request 3 will be processed only by the first kernel,
-        # and the second kernel will get an empty input. While this is not
-        # a fundamental problem, our current implementation does not support
-        # this case.
+        # 实际上,我们用 [A, B, C] 作为公共前缀,而不是 [A, B, C, D]
+        # (即公共前缀被最小的 num_computed_tokens 截断,不加一)。
+        # 这是出于一个实现细节:我们希望级联注意力始终使用两个内核。设想:
+        # 请求 3 的输入查询: [D]
+        # 请求 3 的 kv cache: [A, B, C, D]
+        # 请求 3 的 num_computed_tokens: 3(即 [A, B, C])
+        # 若用 [A, B, C, D] 作为请求 1-3 的公共前缀,则请求 3 将只由第一个内核
+        # 处理,而第二个内核会得到空输入。这虽不是根本性问题,但当前实现不支持
+        # 这种情况。
         common_prefix_len = min(common_prefix_len, num_computed_tokens.min())
-        # common_prefix_len should be a multiple of the block size.
+        # common_prefix_len 应为块大小的整数倍。
         common_prefix_len = (
             common_prefix_len // kv_cache_spec.block_size * kv_cache_spec.block_size
         )
+        # 判断是否使用滑动窗口注意力。
         use_sliding_window = isinstance(kv_cache_spec, SlidingWindowSpec) or (
             isinstance(kv_cache_spec, FullAttentionSpec)
             and kv_cache_spec.sliding_window is not None
         )
+        # 判断是否使用局部注意力。
         use_local_attention = isinstance(kv_cache_spec, ChunkedLocalAttentionSpec) or (
             isinstance(kv_cache_spec, FullAttentionSpec)
             and kv_cache_spec.attention_chunk_size is not None
         )
+        # 断言 KV 规格为注意力规格。
         assert isinstance(kv_cache_spec, AttentionSpec)
+        # 询问构建器是否使用级联注意力。
         use_cascade = attn_metadata_builder.use_cascade_attention(
             common_prefix_len=common_prefix_len,
             query_lens=num_scheduled_tokens,
@@ -2758,20 +3282,27 @@ class GPUModelRunner(
             num_sms=self.num_sms,
             dcp_world_size=self.dcp_world_size,
         )
+        # 使用级联时返回前缀长度,否则返回 0。
         return common_prefix_len if use_cascade else 0
 
+    # 计算本批次所有 token 的 M-RoPE 位置。
     def _calc_mrope_positions(self, scheduler_output: "SchedulerOutput"):
+        # 输出位置的写入指针。
         mrope_pos_ptr = 0
+        # 遍历批次中的每个请求。
         for index, req_id in enumerate(self.input_batch.req_ids):
+            # 取出请求状态。
             req = self.requests[req_id]
             assert req.mrope_positions is not None
 
+            # 获取已计算 token 数、调度 token 数与 prompt 长度。
             num_computed_tokens = self.input_batch.num_computed_tokens_cpu[index]
             num_scheduled_tokens = scheduler_output.num_scheduled_tokens[req_id]
             num_prompt_tokens = length_from_prompt_token_ids_or_embeds(
                 req.prompt_token_ids, req.prompt_embeds
             )
 
+            # 划分本次调度中 prompt 部分与生成部分的长度。
             if num_computed_tokens + num_scheduled_tokens > num_prompt_tokens:
                 prompt_part_len = max(0, num_prompt_tokens - num_computed_tokens)
                 completion_part_len = max(0, num_scheduled_tokens - prompt_part_len)
@@ -2779,26 +3310,32 @@ class GPUModelRunner(
                 prompt_part_len = num_scheduled_tokens
                 completion_part_len = 0
 
+            # 断言两部分之和等于调度数。
             assert num_scheduled_tokens == prompt_part_len + completion_part_len
 
             if prompt_part_len > 0:
-                # prompt's mrope_positions are pre-computed
+                # prompt 的 mrope_positions 已预计算
+                # 确定源与目标区间。
                 dst_start = mrope_pos_ptr
                 dst_end = mrope_pos_ptr + prompt_part_len
                 src_start = num_computed_tokens
                 src_end = num_computed_tokens + prompt_part_len
 
+                # 从预计算结果拷贝 prompt 部分位置。
                 self.mrope_positions.cpu[:, dst_start:dst_end] = req.mrope_positions[
                     :, src_start:src_end
                 ]
+                # 推进写入指针。
                 mrope_pos_ptr += prompt_part_len
 
             if completion_part_len > 0:
-                # compute completion's mrope_positions on-the-fly
+                # 现场计算 completion 部分的 mrope_positions
                 dst_start = mrope_pos_ptr
                 dst_end = mrope_pos_ptr + completion_part_len
 
+                # 断言位置偏移量已存在。
                 assert req.mrope_position_delta is not None
+                # 调用 M-RoPE 旋转嵌入获取后续位置张量。
                 MRotaryEmbedding.get_next_input_positions_tensor(
                     out=self.mrope_positions.np,
                     out_offset=dst_start,
@@ -2807,20 +3344,27 @@ class GPUModelRunner(
                     num_new_tokens=completion_part_len,
                 )
 
+                # 推进写入指针。
                 mrope_pos_ptr += completion_part_len
 
+    # 计算本批次所有 token 的 XD-RoPE 位置。
     def _calc_xdrope_positions(self, scheduler_output: "SchedulerOutput"):
+        # 输出位置的写入指针。
         xdrope_pos_ptr = 0
+        # 遍历批次中的每个请求。
         for index, req_id in enumerate(self.input_batch.req_ids):
+            # 取出请求状态。
             req = self.requests[req_id]
             assert req.xdrope_positions is not None
 
+            # 获取已计算 token 数、调度 token 数与 prompt 长度。
             num_computed_tokens = self.input_batch.num_computed_tokens_cpu[index]
             num_scheduled_tokens = scheduler_output.num_scheduled_tokens[req_id]
             num_prompt_tokens = length_from_prompt_token_ids_or_embeds(
                 req.prompt_token_ids, req.prompt_embeds
             )
 
+            # 划分本次调度中 prompt 部分与生成部分的长度。
             if num_computed_tokens + num_scheduled_tokens > num_prompt_tokens:
                 prompt_part_len = max(0, num_prompt_tokens - num_computed_tokens)
                 completion_part_len = max(0, num_scheduled_tokens - prompt_part_len)
@@ -2828,25 +3372,30 @@ class GPUModelRunner(
                 prompt_part_len = num_scheduled_tokens
                 completion_part_len = 0
 
+            # 断言两部分之和等于调度数。
             assert num_scheduled_tokens == prompt_part_len + completion_part_len
 
             if prompt_part_len > 0:
-                # prompt's xdrope_positions are pre-computed
+                # prompt 的 xdrope_positions 已预计算
+                # 确定源与目标区间。
                 dst_start = xdrope_pos_ptr
                 dst_end = xdrope_pos_ptr + prompt_part_len
                 src_start = num_computed_tokens
                 src_end = num_computed_tokens + prompt_part_len
 
+                # 从预计算结果拷贝 prompt 部分位置。
                 self.xdrope_positions.cpu[:, dst_start:dst_end] = req.xdrope_positions[
                     :, src_start:src_end
                 ]
+                # 推进写入指针。
                 xdrope_pos_ptr += prompt_part_len
 
             if completion_part_len > 0:
-                # compute completion's xdrope_positions on-the-fly
+                # 现场计算 completion 部分的 xdrope_positions
                 dst_start = xdrope_pos_ptr
                 dst_end = xdrope_pos_ptr + completion_part_len
 
+                # 调用 XD-RoPE 旋转嵌入获取后续位置张量。
                 XDRotaryEmbedding.get_next_input_positions_tensor(
                     out=self.xdrope_positions.np,
                     out_offset=dst_start,
@@ -2854,44 +3403,46 @@ class GPUModelRunner(
                     num_new_tokens=completion_part_len,
                 )
 
+                # 推进写入指针。
                 xdrope_pos_ptr += completion_part_len
 
+    # 计算投机解码所需的元数据。
     def _calc_spec_decode_metadata(
         self,
         num_draft_tokens: np.ndarray,
         cu_num_scheduled_tokens: np.ndarray,
     ) -> SpecDecodeMetadata:
-        # Inputs:
+        # 输入:
         # cu_num_scheduled_tokens:  [  4, 104, 107, 207, 209]
         # num_draft_tokens:         [  3,   0,   2,   0,   1]
-        # Outputs:
+        # 输出:
         # cu_num_draft_tokens:      [  3,   3,   5,   5,   6]
         # logits_indices:           [  0,   1,   2,   3, 103, 104, 105, 106,
         #                            206, 207, 208]
         # target_logits_indices:    [  0,   1,   2,   5,   6,   9]
         # bonus_logits_indices:     [  3,   4,   7,   8,  10]
 
-        # Compute the logits indices.
+        # 计算 logits 索引。
         # [4, 1, 3, 1, 2]
         num_sampled_tokens = num_draft_tokens + 1
 
-        # Step 1.
+        # 第 1 步。
         # cu_num_sampled_tokens: [4, 5, 8, 9, 11]
         # _arange_scratch[:11]: [0, 1, 2, 3, 0, 0, 1, 2, 0, 0, 1]
         cu_num_sampled_tokens = self._get_cumsum_and_arange(
             num_sampled_tokens, self._arange_scratch, cumsum_dtype=np.int32
         )
-        # Step 2. [0, 0, 0, 0, 103, 104, 104, 104, 206, 207, 207]
+        # 第 2 步。 [0, 0, 0, 0, 103, 104, 104, 104, 206, 207, 207]
         logits_indices = np.repeat(
             cu_num_scheduled_tokens - num_sampled_tokens, num_sampled_tokens
         )
-        # Step 3. [0, 1, 2, 3, 103, 104, 105, 106, 206, 207, 208]
+        # 第 3 步。 [0, 1, 2, 3, 103, 104, 105, 106, 206, 207, 208]
         logits_indices += self._arange_scratch[: cu_num_sampled_tokens[-1]]
 
-        # Compute the bonus logits indices.
+        # 计算 bonus logits 索引。
         bonus_logits_indices = cu_num_sampled_tokens - 1
 
-        # Compute the draft logits indices.
+        # 计算 draft logits 索引。
         # cu_num_draft_tokens: [3, 3, 5, 5, 6]
         # _arange_scratch[:6]: [0, 1, 2, 0, 1, 0]
         cu_num_draft_tokens = self._get_cumsum_and_arange(
@@ -2904,6 +3455,7 @@ class GPUModelRunner(
         # [0, 1, 2, 5, 6, 9]
         target_logits_indices += self._arange_scratch[: cu_num_draft_tokens[-1]]
 
+        # 将各索引数组异步上传到 GPU。
         cu_num_draft_tokens = async_tensor_h2d(cu_num_draft_tokens, device=self.device)
         cu_num_sampled_tokens = async_tensor_h2d(
             cu_num_sampled_tokens, device=self.device
@@ -2916,11 +3468,12 @@ class GPUModelRunner(
             bonus_logits_indices, device=self.device
         )
 
-        # Compute the draft token ids.
+        # 计算草稿 token ID。
         # draft_token_indices:      [  1,   2,   3, 105, 106, 208]
         draft_token_ids = self.input_ids.gpu[logits_indices]
         draft_token_ids = draft_token_ids[target_logits_indices + 1]
 
+        # 构建并返回投机解码元数据。
         return SpecDecodeMetadata(
             draft_token_ids=draft_token_ids,
             num_draft_tokens=num_draft_tokens.tolist(),
@@ -2931,30 +3484,35 @@ class GPUModelRunner(
             logits_indices=logits_indices,
         )
 
+    # 为 KV 共享快速 prefill 准备填充后的 logits 索引。
     def _prepare_kv_sharing_fast_prefill(
         self,
         logits_indices: torch.Tensor,
     ) -> torch.Tensor:
+        # 断言预分配的索引缓冲区存在。
         assert self.kv_sharing_fast_prefill_logits_indices is not None
+        # logits 数量。
         num_logits = logits_indices.shape[0]
         assert num_logits > 0
+        # 拷贝 logits 索引到缓冲区。
         self.kv_sharing_fast_prefill_logits_indices[:num_logits].copy_(logits_indices)
-        # There might have leftover indices in logits_indices[num_logits:]
-        # from previous iterations, whose values may be greater than the
-        # batch size in the current iteration. To ensure indices are always
-        # valid, fill the padded indices with the last index. Broadcast the
-        # scalar GPU-side to avoid a D2H sync on `.item()`.
+        # 上一轮迭代可能在 logits_indices[num_logits:] 中残留旧索引,其值可能
+        # 大于当前迭代的批大小。为确保索引始终有效,用最后一个索引填充填充位。
+        # 在 GPU 侧广播标量,以避免 .item() 触发 D2H 同步。
         self.kv_sharing_fast_prefill_logits_indices[num_logits:] = logits_indices[-1]
-        # Dispatch for the decoder portion of the model.
+        # 为模型解码器部分分派 CUDA 图模式。
         _, batch_desc = self.cudagraph_dispatcher.dispatch(
             num_logits, invalid_modes={CUDAGraphMode.FULL}
         )
+        # 填充后的 logits 数量。
         num_logits_padded = batch_desc.num_tokens
         logits_indices_padded = self.kv_sharing_fast_prefill_logits_indices[
             :num_logits_padded
         ]
+        # 返回填充后的 logits 索引。
         return logits_indices_padded
 
+    # 从调度器输出批量整理多模态编码器输入。
     def _batch_mm_inputs_from_scheduler(
         self,
         scheduler_output: "SchedulerOutput",
@@ -2963,41 +3521,50 @@ class GPUModelRunner(
         list[tuple[str, MultiModalKwargsItem]],
         list[tuple[str, PlaceholderRange]],
     ]:
-        """Batch multimodal inputs from scheduled encoder inputs.
+        """从已调度的编码器输入批量整理多模态输入。
 
         Args:
-            scheduler_output: The scheduler output containing scheduled encoder
-                inputs.
+            scheduler_output: 包含已调度编码器输入的调度器输出。
 
         Returns:
-            A tuple of (mm_hashes, mm_kwargs, mm_lora_refs) where:
-            - mm_hashes: List of multimodal hashes for each item
-            - mm_kwargs: List of multimodal kwargs for each item
-            - mm_lora_refs: List of (req_id, placeholder_range) for each item
+            元组 (mm_hashes, mm_kwargs, mm_lora_refs),其中:
+            - mm_hashes: 每个条目的多模态哈希列表
+            - mm_kwargs: 每个条目的多模态 kwargs 列表
+            - mm_lora_refs: 每个条目的 (req_id, placeholder_range) 列表
         """
+        # 获取已调度的编码器输入。
         scheduled_encoder_inputs = scheduler_output.scheduled_encoder_inputs
         if not scheduled_encoder_inputs:
+            # 无编码器输入时返回三个空列表。
             return [], [], []
 
+        # 多模态哈希列表。
         mm_hashes = list[str]()
+        # 多模态 kwargs 列表。
         mm_kwargs = list[tuple[str, MultiModalKwargsItem]]()
-        # Multimodal LoRA reference info to map each multimodal item
-        # back to its request & position
+        # 多模态 LoRA 引用信息,用于把每个多模态条目映射回其请求与位置
         mm_lora_refs = list[tuple[str, PlaceholderRange]]()
+        # 遍历每个请求的编码器输入 ID。
         for req_id, encoder_input_ids in scheduled_encoder_inputs.items():
+            # 取出请求状态。
             req_state = self.requests[req_id]
 
             for mm_input_id in encoder_input_ids:
+                # 取出多模态特征。
                 mm_feature = req_state.mm_features[mm_input_id]
                 if mm_feature.data is None:
+                    # 无数据则跳过。
                     continue
 
+                # 记录哈希、kwargs 与 LoRA 引用。
                 mm_hashes.append(mm_feature.identifier)
                 mm_kwargs.append((mm_feature.modality, mm_feature.data))
                 mm_lora_refs.append((req_id, mm_feature.mm_position))
 
+        # 返回哈希、kwargs 与 LoRA 引用。
         return mm_hashes, mm_kwargs, mm_lora_refs
 
+    # 缓存编码器输出,供后续多模态嵌入收集使用。
     def _cache_encoder_output(
         self,
         mm_hash: str,
@@ -3005,32 +3572,37 @@ class GPUModelRunner(
         ec_manager_metadata: "EncoderCacheManagerMetadata | None",
         free_encoder_mm_hashes: list[str],
     ) -> None:
-        """Store an encoder output for later multimodal embedding gather."""
+        """存储编码器输出,供后续多模态嵌入收集使用。"""
+        # 显式丢弃未用参数。
         del ec_manager_metadata, free_encoder_mm_hashes
+        # 按哈希存入编码器缓存。
         self.encoder_cache[mm_hash] = output
+        # 视情况将编码器输出保存到连接器。
         self.maybe_save_ec_to_connector(self.encoder_cache, mm_hash)
 
+    # 执行多模态编码器并返回各条目的编码输出。
     def _execute_mm_encoder(
         self, scheduler_output: "SchedulerOutput"
     ) -> list[torch.Tensor]:
+        # 从调度器输出批量整理多模态输入。
         mm_hashes, mm_kwargs, mm_lora_refs = self._batch_mm_inputs_from_scheduler(
             scheduler_output
         )
 
+        # 无待编码输入时直接返回。
         if not mm_kwargs:
             return []
 
-        # `prompt_embeds` is a passthrough modality, the tensor is already in
-        # the model embedding space, so no encoder runs. Inject each
-        # `prompt_embeds` tensor directly into the encoder cache here so that
-        # `_gather_mm_embeddings` can splice it via the standard `is_mm_embed`
-        # path.
+        # `prompt_embeds` 是直通模态,张量已处于模型嵌入空间,无需运行编码器。
+        # 这里把每个 `prompt_embeds` 张量直接注入编码器缓存,使
+        # `_gather_mm_embeddings` 能通过标准的 `is_mm_embed` 路径拼接它。
         pe_indices = [
             i
             for i, (modality, _) in enumerate(mm_kwargs)
             if modality == "prompt_embeds"
         ]
         if pe_indices:
+            # 逐个缓存 prompt_embeds 张量。
             for i in pe_indices:
                 pe_tensor = mm_kwargs[i][1]["embedding"].data
                 assert isinstance(pe_tensor, torch.Tensor)
@@ -3041,44 +3613,44 @@ class GPUModelRunner(
                     scheduler_output.ec_manager_metadata,
                     scheduler_output.free_encoder_mm_hashes,
                 )
-            # Filter out `prompt_embeds` items from mm_kwargs/mm_hashes/mm_lora_refs
-            # since they don't require further encoder processing.
+            # 从 mm_kwargs/mm_hashes/mm_lora_refs 中过滤掉 `prompt_embeds` 条目,
+            # 因为它们不需要进一步的编码器处理。
             mm_hashes = [h for i, h in enumerate(mm_hashes) if i not in pe_indices]
             mm_kwargs = [k for i, k in enumerate(mm_kwargs) if i not in pe_indices]
             mm_lora_refs = [
                 r for i, r in enumerate(mm_lora_refs) if i not in pe_indices
             ]
             if not mm_kwargs:
-                return []  # nothing left to encode after filtering out `prompt_embeds`
+                # 过滤掉 `prompt_embeds` 后已无可编码内容
+                return []
 
+        # 判断是否启用编码器计时统计。
         should_time = bool(
             self.observability_config
             and self.observability_config.enable_mm_processor_stats
             and scheduler_output.scheduled_encoder_inputs
         )
 
-        # Batch mm inputs as much as we can: if a request in the batch has
-        # multiple modalities or a different modality than the previous one,
-        # we process it separately to preserve item order.
-        # FIXME(ywang96): This is a hacky way to deal with multiple modalities
-        # in the same batch while still being able to benefit from batching
-        # multimodal inputs. The proper solution should be reordering the
-        # encoder outputs.
+        # 尽可能批量处理多模态输入:若批次中某请求包含多个模态,或与前一个请求
+        # 模态不同,则单独处理以保持条目顺序。
+        # FIXME(ywang96): 这是处理同一批次内多模态的临时方案,同时仍能受益于
+        # 多模态输入批处理。正确的方案应是重排编码器输出。
         model = cast(SupportsMultiModal, self.model)
 
+        # 启用 LoRA 且支持塔式连接器 LoRA 时,为编码器输入独立构建映射。
         if self.lora_config and self.lora_manager.supports_tower_connector_lora():
-            # Build LoRA mappings independently for encoder inputs
-            # (encoder batch structure is different from main batch)
+            # (编码器批次结构与主批次不同)
             prompt_lora_mapping = []
             token_lora_mapping = []
             lora_requests = set()
             encoder_token_counts = []
 
+            # 遍历每个多模态条目并构建 LoRA 映射。
             for req_id, pos_info in mm_lora_refs:
                 req_idx = self.input_batch.req_id_to_index[req_id]
                 lora_id = int(self.input_batch.request_lora_mapping[req_idx])
 
-                # Prefer pos_info.get_num_embeds to count precise MM embedding tokens.
+                # 优先使用 pos_info.get_num_embeds 精确统计 MM 嵌入 token 数。
                 num_tokens = self.model.get_num_mm_encoder_tokens(  # type: ignore[attr-defined]
                     pos_info.get_num_embeds()
                 )
@@ -3087,11 +3659,12 @@ class GPUModelRunner(
                 encoder_token_counts.append(num_tokens)
 
                 if lora_id > 0:
+                    # 收集涉及的 LoRA 请求。
                     lora_request = self.input_batch.lora_id_to_lora_request.get(lora_id)
                     if lora_request is not None:
                         lora_requests.add(lora_request)
 
-            # Set tower adapter mapping
+            # 设置塔式适配器映射
             tower_mapping = LoRAMapping(
                 tuple(token_lora_mapping),
                 tuple(prompt_lora_mapping),
@@ -3100,10 +3673,10 @@ class GPUModelRunner(
             )
             self.lora_manager.set_active_adapters(lora_requests, tower_mapping)
 
-            # Only set connector mapping if the model actually has a connector.
-            # Some multimodal models inherit a stub `get_num_mm_connector_tokens`
-            # from `SupportsMultiModal`, which returns None and should not be
-            # treated as a signal that connector LoRA is supported.
+            # 仅当模型确实有连接器时才设置连接器映射。
+            # 某些多模态模型从 `SupportsMultiModal` 继承了桩实现
+            # `get_num_mm_connector_tokens`,它返回 None,不应被视为支持
+            # 连接器 LoRA 的信号。
             mm_mapping = (
                 self.model.get_mm_mapping()  # type: ignore[attr-defined]
                 if hasattr(self.model, "get_mm_mapping")
@@ -3114,11 +3687,13 @@ class GPUModelRunner(
                 and mm_mapping.connector
                 and hasattr(self.model, "get_num_mm_connector_tokens")
             ):
+                # 计算连接器后的 token 数。
                 post_op_counts = [
                     self.model.get_num_mm_connector_tokens(num_tokens)  # type: ignore[attr-defined]
                     for num_tokens in encoder_token_counts
                 ]
 
+                # 生成连接器 token 级映射。
                 connector_token_mapping = np.repeat(
                     np.array(prompt_lora_mapping, dtype=np.int32),
                     np.array(post_op_counts, dtype=np.int32),
@@ -3130,31 +3705,31 @@ class GPUModelRunner(
                     type=LoRAMappingType.CONNECTOR,
                 )
 
+                # 设置连接器 LoRA 映射。
                 self.lora_manager.set_active_adapters(
                     lora_requests,
                     connector_mapping,
                 )
 
+        # 编码器输出列表。
         encoder_outputs: list[torch.Tensor] = []
-        # Track the current index in mm_kwargs/mm_lora_refs to map groups to request IDs
+        # 跟踪 mm_kwargs/mm_lora_refs 中的当前索引,把组映射回请求 ID
         current_item_idx = 0
+        # 按模态分组批量处理。
         for modality, num_items, mm_kwargs_batch in group_and_batch_mm_kwargs(
             mm_kwargs, device=self.device, pin_memory=PIN_MEMORY
         ):
+            # 组输出。
             batch_outputs: MultiModalEmbeddings
 
-            # EVS and dynamic res video related change.
-            # (ekhvedchenia): Temporary hack to limit peak memory usage when
-            # processing multimodal data. This solves the issue with scheduler
-            # putting too many video samples into a single batch. Scheduler
-            # uses pruned vision tokens count to compare it versus compute
-            # budget which is incorrect (Either input media size or non-pruned
-            # output vision tokens count should be considered)
-            # dynamic res video for nemotron temporarily uses this hack via
-            # requires_sequential_video_encoding
-            # because it doesn't yet support video batching.
-            # TODO(ywang96): Fix memory profiling to take EVS into account and
-            # remove this hack.
+            # EVS 与动态分辨率视频相关改动。
+            # (ekhvedchenia): 处理多模态数据时限制峰值显存的临时 hack。
+            # 这解决了调度器把过多视频样本放进单个批次的问题。调度器用剪枝后的
+            # 视觉 token 数与计算预算比较,这是不正确的(应考虑输入媒体大小或
+            # 未剪枝的输出视觉 token 数)。
+            # nemotron 的动态分辨率视频通过 requires_sequential_video_encoding
+            # 暂时使用此 hack,因为它尚不支持视频批处理。
+            # TODO(ywang96): 修复内存剖析以考虑 EVS 并移除此 hack。
             if (
                 (
                     self.is_multimodal_pruning_enabled
@@ -3163,12 +3738,15 @@ class GPUModelRunner(
                 and modality == "video"
                 and num_items > 1
             ):
+                # 视频逐条顺序编码。
                 batch_outputs_lst = list[torch.Tensor]()
                 for video_idx in range(num_items):
+                    # 取出单个视频条目。
                     video_mm_kwargs_item = mm_kwargs[current_item_idx + video_idx]
                     with self.timed_encoder_operation(
                         should_time, mm_lora_refs, current_item_idx + video_idx, 1
                     ):
+                        # 为单个视频构建微批输入。
                         _, _, micro_batch_mm_inputs = next(
                             group_and_batch_mm_kwargs(
                                 [video_mm_kwargs_item],
@@ -3177,45 +3755,54 @@ class GPUModelRunner(
                             )
                         )
 
+                        # 逐个编码视频。
                         micro_batch_outputs = model.embed_multimodal(
                             **micro_batch_mm_inputs
                         )
 
+                        # 收集微批输出。
                         batch_outputs_lst.extend(micro_batch_outputs)
 
                 batch_outputs = batch_outputs_lst
             else:
-                # Run the encoder.
-                # `batch_outputs` is either of the following:
-                # 1. A tensor of shape (num_items, feature_size, hidden_size)
-                # in case feature_size is fixed across all multimodal items.
-                # 2. A list or tuple (length: num_items) of tensors,
-                # each of shape (feature_size, hidden_size) in case the feature
-                # size is dynamic depending on the input multimodal items.
+                # 运行编码器。
+                # `batch_outputs` 是以下两者之一:
+                # 1. 形状为 (num_items, feature_size, hidden_size) 的张量,
+                # 适用于 feature_size 在所有多模态条目间固定的情形。
+                # 2. 长度为 num_items 的列表或元组,每个元素形状为
+                # (feature_size, hidden_size),适用于 feature_size 依赖于
+                # 输入多模态条目的动态情形。
 
                 with self.timed_encoder_operation(
                     should_time, mm_lora_refs, current_item_idx, num_items
                 ):
+                    # CUDA 图输出。
                     cudagraph_output = None
                     if (
                         self.encoder_cudagraph_manager is not None
                         and self.encoder_cudagraph_manager.supports_modality(modality)
                     ):
+                        # 支持时用 CUDA 图执行编码。
                         cudagraph_output = self.encoder_cudagraph_manager.execute(
                             mm_kwargs_batch,
                         )
 
                     if cudagraph_output is not None:
+                        # 使用 CUDA 图输出。
                         batch_outputs = cudagraph_output
                     else:
+                        # 直接调用模型的嵌入方法。
                         batch_outputs = model.embed_multimodal(**mm_kwargs_batch)
 
+            # 校验输出条目数。
             sanity_check_mm_encoder_outputs(batch_outputs, expected_num_items=num_items)
+            # 收集编码输出。
             encoder_outputs.extend(batch_outputs)
 
+            # 推进条目索引。
             current_item_idx += num_items
 
-        # Cache the encoder outputs by mm_hash
+        # 按 mm_hash 缓存编码器输出
         for mm_hash, output in zip(mm_hashes, encoder_outputs):
             self._cache_encoder_output(
                 mm_hash,
@@ -3225,21 +3812,27 @@ class GPUModelRunner(
             )
             logger.debug("Finish execute for mm hash %s", mm_hash)
 
+        # 返回编码器输出列表。
         return encoder_outputs
 
+    # 从缓存中获取指定哈希的编码器输出。
     def _get_encoder_output_from_cache(self, mm_hash: str) -> torch.Tensor | None:
-        """Return a cached encoder output for multimodal
-        embedding gather."""
+        """返回缓存中用于多模态嵌入收集的编码器输出。"""
+        # 按哈希查询缓存(可能不存在)。
         return self.encoder_cache.get(mm_hash, None)
 
+    # 收集本批次的多模态嵌入。
     def _gather_mm_embeddings(
         self,
         scheduler_output: "SchedulerOutput",
         shift_computed_tokens: int = 0,
     ) -> tuple[list[torch.Tensor], torch.Tensor]:
+        # 本步调度的 token 总数。
         total_num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
 
+        # 多模态嵌入列表。
         mm_embeds = list[torch.Tensor]()
+        # 标记每个 token 位置是否为多模态嵌入。
         is_mm_embed = torch.zeros(
             total_num_scheduled_tokens,
             dtype=torch.bool,
@@ -3247,64 +3840,78 @@ class GPUModelRunner(
             pin_memory=PIN_MEMORY,
         )
 
+        # 当前请求在扁平输出中的起始索引。
         req_start_idx = 0
+        # 是否需要同步 M-RoPE 位置。
         should_sync_mrope_positions = False
+        # 是否需要同步 XD-RoPE 位置。
         should_sync_xdrope_positions = False
 
+        # 遍历批次中的每个请求。
         for req_id in self.input_batch.req_ids:
+            # 该请求的嵌入列表。
             mm_embeds_req: list[torch.Tensor] = []
 
+            # 获取调度 token 数与请求状态。
             num_scheduled_tokens = scheduler_output.num_scheduled_tokens[req_id]
             req_state = self.requests[req_id]
             num_computed_tokens = req_state.num_computed_tokens + shift_computed_tokens
 
+            # 取出多模态特征并确定当前窗口内的特征范围。
             mm_features = req_state.mm_features
             lo, hi = get_mm_features_in_window(
                 mm_features,
                 start=num_computed_tokens,
                 end=num_computed_tokens + num_scheduled_tokens,
             )
+            # 遍历窗口内的每个特征。
             for i in range(lo, hi):
                 mm_feature = mm_features[i]
                 pos_info = mm_feature.mm_position
+                # 特征的起始偏移与编码器 token 数。
                 start_pos = pos_info.offset
                 num_encoder_tokens = pos_info.length
 
+                # 计算本步涉及的编码器 token 区间。
                 start_idx = max(num_computed_tokens - start_pos, 0)
                 end_idx = min(
                     num_computed_tokens - start_pos + num_scheduled_tokens,
                     num_encoder_tokens,
                 )
                 assert start_idx < end_idx
+                # 获取该区间内的嵌入索引。
                 curr_embeds_start, curr_embeds_end = (
                     pos_info.get_embeds_indices_in_range(start_idx, end_idx)
                 )
-                # If there are no embeddings in the current range, we skip
-                # gathering the embeddings.
+                # 当前区间没有嵌入时跳过收集
                 if curr_embeds_start == curr_embeds_end:
                     continue
 
+                # 按哈希查询编码器输出。
                 mm_hash = mm_feature.identifier
                 encoder_output = self._get_encoder_output_from_cache(mm_hash)
                 if encoder_output is None:
-                    # A feature starting at/after the processed boundary is only
-                    # reached via the drafter's +1 look-ahead and might not be
-                    # encoded yet; fall back to the token embedding for drafting.
+                    # 起始于已处理边界之后的特征仅经由 drafter 的 +1 前瞻到达,
+                    # 可能尚未编码;起草时回退到 token 嵌入。
                     if (
                         start_pos
                         >= req_state.num_computed_tokens + num_scheduled_tokens
                     ):
                         continue
+                    # 编码器缓存未命中,抛出错误。
                     raise RuntimeError(f"Encoder cache miss for {mm_hash}.")
 
                 if (is_embed := pos_info.is_embed) is not None:
+                    # 有嵌入标记时按嵌入区间切片。
                     is_embed = is_embed[start_idx:end_idx]
                     mm_embeds_item = encoder_output[curr_embeds_start:curr_embeds_end]
                 else:
+                    # 无嵌入标记时直接按区间切片。
                     mm_embeds_item = encoder_output[start_idx:end_idx]
 
+                # 计算该特征在请求输出中的起始位置。
                 req_start_pos = req_start_idx + start_pos - num_computed_tokens
-                # OR mask for overlapping mm_features (use_audio_in_video)
+                # 对重叠的 mm_features(如 use_audio_in_video)取或掩码
                 if is_embed is None:
                     is_mm_embed[req_start_pos + start_idx : req_start_pos + end_idx] = (
                         True
@@ -3313,10 +3920,12 @@ class GPUModelRunner(
                     is_mm_embed[
                         req_start_pos + start_idx : req_start_pos + end_idx
                     ] |= is_embed
+                # 设置嵌入的模态信息。
                 set_mm_embedding_modality(mm_embeds_item, mm_feature.modality)
                 mm_embeds_req.append(mm_embeds_item)
 
             if self.is_multimodal_pruning_enabled and self.uses_mrope:
+                # 启用剪枝且使用 M-RoPE 时重算位置。
                 assert req_state.mrope_positions is not None
                 should_sync_mrope_positions = True
                 old_mm_embeds_req = mm_embeds_req
@@ -3328,36 +3937,45 @@ class GPUModelRunner(
                         num_computed_tokens=req_state.num_computed_tokens,
                     )
                 )
+                # 把模态信息复制到重算后的嵌入。
                 mm_embeds_req = [
                     copy_mm_embedding_modality(src, dst)
                     for src, dst in zip(old_mm_embeds_req, mm_embeds_req)
                 ]
+                # 更新请求状态中的位置。
                 req_state.mrope_positions.copy_(new_mrope_positions)
                 req_state.mrope_position_delta = new_delta
 
+            # 收集该请求的嵌入并推进起始索引。
             mm_embeds.extend(mm_embeds_req)
             req_start_idx += num_scheduled_tokens
 
         if should_sync_mrope_positions:
+            # 重算并上传 M-RoPE 位置。
             self._calc_mrope_positions(scheduler_output)
             self.mrope_positions.copy_to_gpu(total_num_scheduled_tokens)
 
         if should_sync_xdrope_positions:
+            # 重算并上传 XD-RoPE 位置。
             self._calc_xdrope_positions(scheduler_output)
             self.xdrope_positions.copy_to_gpu(total_num_scheduled_tokens)
 
+        # 返回嵌入列表与嵌入标记掩码。
         return mm_embeds, is_mm_embed
 
+    # 获取当前模型(未包装的原始模型)。
     def get_model(self) -> nn.Module:
+        # 模型尚未初始化时报错。
         if not hasattr(self, "model"):
             raise ValueError("Cannot get model before model has been initialized")
         if isinstance(
             self.model, (CUDAGraphWrapper, UBatchWrapper, BreakableCUDAGraphWrapper)
         ):
-            # get raw model out of the cudagraph wrapper.
+            # 从 CUDA 图包装器中取出原始模型。
             return self.model.unwrap()
         return self.model
 
+    # 获取起草模型(drafter 内的模型)。
     def get_draft_model(self) -> nn.Module | None:
         drafter = getattr(self, "drafter", None)
         if drafter is None:
@@ -3369,93 +3987,120 @@ class GPUModelRunner(
             return cast(nn.Module, model.unwrap())
         return cast(nn.Module | None, model)
 
+    # 获取支持的生成任务列表。
     def get_supported_generation_tasks(self) -> list[GenerationTask]:
+        # 获取原始模型。
         model = self.get_model()
         supported_tasks = list[GenerationTask]()
 
         if is_text_generation_model(model):
+            # 文本生成模型支持 generate。
             supported_tasks.append("generate")
 
         if supports_transcription(model):
             if model.supports_transcription_only:
+                # 仅支持转写时直接返回。
                 return ["transcription"]
 
             supported_tasks.append("transcription")
 
         if supports_realtime(model):
+            # 支持实时任务。
             supported_tasks.append("realtime")
 
+        # 返回支持的生成任务。
         return supported_tasks
 
+    # 获取支持的池化任务列表。
     def get_supported_pooling_tasks(self) -> list[PoolingTask]:
+        # 获取原始模型。
         model = self.get_model()
         if not is_pooling_model(model):
             return []
 
+        # 返回池化器支持的任务。
         return list(model.pooler.get_supported_tasks())
 
+    # 获取支持的全部任务。
     def get_supported_tasks(self) -> tuple[SupportedTask, ...]:
         tasks = list[SupportedTask]()
 
         if self.model_config.runner_type == "generate":
+            # 生成型 runner。
             tasks.extend(self.get_supported_generation_tasks())
         if self.model_config.runner_type == "pooling":
+            # 池化型 runner。
             tasks.extend(self.get_supported_pooling_tasks())
 
+        # 返回任务元组。
         return tuple(tasks)
 
+    # 同步并收集中间张量(流水线并行/序列并行场景)。
     def sync_and_gather_intermediate_tensors(
         self,
         num_tokens: int,
         intermediate_tensors: IntermediateTensors | None,
         sync_self: bool,
     ) -> IntermediateTensors:
+        # 断言中间张量缓冲区已初始化。
         assert self.intermediate_tensors is not None
 
+        # 张量并行大小。
         tp = self.vllm_config.parallel_config.tensor_parallel_size
+        # 判断残差张量是否因序列并行而被分散。
         is_rs = is_residual_scattered_for_sp(self.vllm_config, num_tokens)
 
-        # When sequence parallelism is enabled, the "residual" tensor is
-        # sharded across TP ranks. All-gather it here because downstream
-        # QKV + Attention needs the full residual before the SP split point.
+        # 启用序列并行时,"residual" 张量在 TP 秩间分片。这里进行 all-gather,
+        # 因为下游 QKV + Attention 需要在 SP 切分点之前拿到完整的 residual。
         if sync_self:
             assert intermediate_tensors is not None
             for k, v in intermediate_tensors.items():
+                # 判断该张量是否为被分散的 residual。
                 is_scattered = k == "residual" and is_rs
                 if is_scattered:
+                    # 先 all-gather 本地分片得到完整残差。
                     local_len = num_tokens // tp
                     v = get_tp_group().all_gather(v[:local_len], dim=0)
 
+                # 异步拷贝到预分配的中间张量缓冲区。
                 self.intermediate_tensors[k][:num_tokens].copy_(
                     v[:num_tokens], non_blocking=True
                 )
 
+        # 返回切片后的中间张量视图。
         return IntermediateTensors(
             {k: v[:num_tokens] for k, v in self.intermediate_tensors.items()}
         )
 
+    # 推进 EPLB(专家并行负载均衡)状态。
     def eplb_step(self, is_dummy: bool = False, is_profile: bool = False) -> None:
         """
-        Step for the EPLB (Expert Parallelism Load Balancing) state.
+        EPLB(专家并行负载均衡)状态的单步推进。
         """
+        # 未启用 EPLB 或被抑制时直接返回。
         if not self.parallel_config.enable_eplb or self.eep_eplb_suppressed:
             return
 
+        # 断言状态与 MoE 模型已就绪。
         assert self.eplb_state is not None
         assert self._moe_model is not None
+        # 推进 EPLB 状态。
         self.eplb_state.step(
             is_dummy,
             is_profile,
             log_stats=self.parallel_config.eplb_config.log_balancedness,
         )
 
+    # 依据物理-逻辑专家映射重建 EPLB 状态。
     def setup_eplb_from_mapping(
         self,
         expanded_physical_to_logical: torch.Tensor,
         old_num_physical_experts: int,
     ) -> None:
+        # 断言 MoE 模型已就绪。
         assert self._moe_model is not None
 
+        # 从映射构建新的 EPLB 状态。
         self.eplb_state = EplbState.from_mapping(
             model=self._moe_model,
             model_config=self.model_config,
@@ -3465,6 +4110,7 @@ class GPUModelRunner(
             num_valid_physical_experts=old_num_physical_experts,
         )
 
+    # 执行池化模型并构造输出。
     def _pool(
         self,
         hidden_states: torch.Tensor,
@@ -3472,14 +4118,17 @@ class GPUModelRunner(
         num_scheduled_tokens_np: np.ndarray,
         kv_connector_output: KVConnectorOutput | None,
     ) -> ModelRunnerOutput | AsyncModelRunnerOutput:
+        # 持久批次中的请求数。
         num_reqs = self.input_batch.num_reqs
         assert num_reqs == len(self.input_batch.pooling_params), (
             "Either all or none of the requests in a batch must be pooling request"
         )
 
+        # 截取本步调度的隐藏状态。
         hidden_states = hidden_states[:num_scheduled_tokens]
         seq_lens_cpu = self.optimistic_seq_lens_cpu[:num_reqs]
 
+        # 获取池化元数据并构建池化游标。
         pooling_metadata = self.input_batch.get_pooling_metadata()
         pooling_metadata.build_pooling_cursor(
             num_scheduled_tokens_np,
@@ -3488,15 +4137,18 @@ class GPUModelRunner(
             query_start_loc_gpu=self.query_start_loc.gpu[: num_reqs + 1],
         )
 
+        # 调用模型的池化器。
         model = cast(VllmModelForPooling, self.model)
         raw_pooler_output: PoolerOutput = model.pooler(
             hidden_states=hidden_states, pooling_metadata=pooling_metadata
         )
 
+        # 标记序列长度已达 prompt 长度(即已完成)的请求。
         finished_mask = [
             seq_len == prompt_len
             for seq_len, prompt_len in zip(seq_lens_cpu, pooling_metadata.prompt_lens)
         ]
+        # 对池化输出做 late_interaction 后处理。
         raw_pooler_output = self.late_interaction_runner.postprocess_pooler_output(
             raw_pooler_output=raw_pooler_output,
             pooling_params=pooling_metadata.pooling_params,
@@ -3504,19 +4156,21 @@ class GPUModelRunner(
             finished_mask=finished_mask,
         )
 
+        # 构造基础的 ModelRunnerOutput。
         model_runner_output = ModelRunnerOutput(
             req_ids=self.input_batch.req_ids.copy(),
             req_id_to_index=self.input_batch.req_id_to_index.copy(),
             kv_connector_output=kv_connector_output,
         )
 
+        # 无原始池化输出或没有已完成的请求时,同步设备并返回空池化输出。
         if raw_pooler_output is None or not any(finished_mask):
             self._sync_device()
             model_runner_output.pooler_output = [None] * num_reqs
             return model_runner_output
 
         if not current_platform.is_cuda_alike():
-            # cpu/xpu runners cannot use the CUDA stream/event-based wrapper.
+            # cpu/xpu runner 不能使用基于 CUDA 流/事件的包装。
             model_runner_output.pooler_output = _copy_pooler_output_to_cpu(
                 raw_pooler_output=raw_pooler_output,
                 finished_mask=finished_mask,
@@ -3524,6 +4178,7 @@ class GPUModelRunner(
             self._sync_device()
             return model_runner_output
 
+        # 返回异步 GPU 池化输出包装。
         return AsyncGPUPoolingModelRunnerOutput(
             model_runner_output=model_runner_output,
             raw_pooler_output=raw_pooler_output,
@@ -3531,29 +4186,33 @@ class GPUModelRunner(
             async_output_copy_stream=self._get_or_create_async_output_copy_stream(),
         )
 
+    # 序列并行启用时,把 token 数向上填充到张量并行大小的整数倍。
     def _pad_for_sequence_parallelism(self, num_scheduled_tokens: int) -> int:
-        # Pad tokens to multiple of tensor_parallel_size when
-        # enabled collective fusion for SP
+        # 为 SP 启用集合通信融合时,把 token 数填充为 tensor_parallel_size 的倍数
         tp_size = self.vllm_config.parallel_config.tensor_parallel_size
         if self.compilation_config.pass_config.enable_sp and tp_size > 1:
             return round_up(num_scheduled_tokens, tp_size)
         return num_scheduled_tokens
 
+    # 准备多模态模型的输入张量。
     def _prepare_mm_inputs(
         self, num_tokens: int
     ) -> tuple[torch.Tensor | None, torch.Tensor]:
         if self.model.requires_raw_input_tokens:
+            # 需要原始输入 token 时提供 input_ids。
             input_ids = self.input_ids.gpu[:num_tokens]
         else:
             input_ids = None
 
+        # 返回输入 ID 与嵌入。
         inputs_embeds = self.inputs_embeds.gpu[:num_tokens]
         return input_ids, inputs_embeds
 
+    # 模型前向前的预处理:准备输入 ID/嵌入、位置与中间张量。
     def _preprocess(
         self,
         scheduler_output: "SchedulerOutput",
-        num_input_tokens: int,  # Padded
+        num_input_tokens: int,  # 已填充
         intermediate_tensors: IntermediateTensors | None = None,
     ) -> tuple[
         torch.Tensor | None,
@@ -3563,48 +4222,51 @@ class GPUModelRunner(
         dict[str, Any],
         ECConnectorOutput | None,
     ]:
+        # 本步调度的 token 总数。
         num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
+        # 是否为流水线并行的第一个 rank。
         is_first_rank = get_pp_group().is_first_rank
+        # 是否为编码器-解码器模型。
         is_encoder_decoder = self.model_config.is_encoder_decoder
 
-        # Clamp speculative scheduler placeholders (-1) before embedding lookup.
+        # 在嵌入查找前截断投机调度器的占位符(-1)。
         if self.speculative_config is not None:
             self.input_ids.gpu[:num_input_tokens].clamp_(min=0)
 
-        # _prepare_inputs may reorder the batch, so we must gather multi
-        # modal outputs after that to ensure the correct order
+        # _prepare_inputs 可能重排批次,因此必须在之后收集多模态输出,
+        # 以保证顺序正确
         ec_connector_output = None
 
         if self.supports_mm_inputs and is_first_rank and not is_encoder_decoder:
-            # Run the multimodal encoder if any.
+            # 若有多模态编码器则运行之。
             with self.maybe_get_ec_connector_output(
                 scheduler_output,
                 encoder_cache=self.encoder_cache,
             ) as ec_connector_output:
                 self._execute_mm_encoder(scheduler_output)
+                # 收集多模态嵌入。
                 mm_embeds, is_mm_embed = self._gather_mm_embeddings(scheduler_output)
 
-            # NOTE(woosuk): To unify token ids and soft tokens (vision
-            # embeddings), we always use embeddings (rather than token ids)
-            # as input to the multimodal model, even when the input is text.
+            # 注意(woosuk): 为统一 token ID 与软 token(视觉嵌入),
+            # 即使输入是文本,我们始终用嵌入(而非 token ID)作为多模态模型的输入。
             if self.enable_prompt_embeds and self.input_batch.req_prompt_embeds:
-                # Some positions carry precomputed prompt_embeds: they are
-                # already in self.inputs_embeds and marked is_token_ids=False.
-                # Embed only the token-id positions (zeroing the placeholder ids
-                # at prompt_embeds positions so the embedding gather cannot read
-                # out-of-range ids), and write them back without clobbering the
-                # prompt_embeds positions.
+                # 某些位置带有预计算的 prompt_embeds:它们已在 self.inputs_embeds
+                # 中,并标记为 is_token_ids=False。仅对 token ID 位置做嵌入
+                # (把 prompt_embeds 位置的占位 ID 置 0,使嵌入收集不会读到
+                # 越界 ID),写回时不覆盖 prompt_embeds 位置。
                 is_token_ids = self.is_token_ids.gpu[:num_scheduled_tokens]
                 safe_input_ids = torch.where(
                     is_token_ids,
                     self.input_ids.gpu[:num_scheduled_tokens],
                     0,
                 )
+                # 对 token ID 位置计算嵌入。
                 inputs_embeds_scheduled = self.model.embed_input_ids(
                     safe_input_ids,
                     multimodal_embeddings=mm_embeds,
                     is_multimodal=is_mm_embed,
                 )
+                # 只写回 token ID 位置,保留 prompt_embeds 位置。
                 target = self.inputs_embeds.gpu[:num_scheduled_tokens]
                 self.inputs_embeds.gpu[:num_scheduled_tokens] = torch.where(
                     is_token_ids.unsqueeze(-1),
@@ -3612,38 +4274,37 @@ class GPUModelRunner(
                     target,
                 )
             else:
+                # 对全部位置计算嵌入。
                 inputs_embeds_scheduled = self.model.embed_input_ids(
                     self.input_ids.gpu[:num_scheduled_tokens],
                     multimodal_embeddings=mm_embeds,
                     is_multimodal=is_mm_embed,
                 )
 
-                # TODO(woosuk): Avoid the copy. Optimize.
+                # TODO(woosuk): 避免该拷贝。待优化。
                 self.inputs_embeds.gpu[:num_scheduled_tokens].copy_(
                     inputs_embeds_scheduled
                 )
 
+            # 准备多模态输入与模型 kwargs。
             input_ids, inputs_embeds = self._prepare_mm_inputs(num_input_tokens)
             model_kwargs = {
                 **self._init_model_kwargs(),
                 **self._extract_mm_kwargs(scheduler_output),
             }
         elif self.enable_prompt_embeds and is_first_rank:
-            # Get the input embeddings for the tokens that are not input embeds,
-            # then put them into the appropriate positions.
-            # TODO(qthequartermasterman): Since even when prompt embeds are
-            # enabled, (a) not all requests will use prompt embeds, and (b)
-            # after the initial prompt is processed, the rest of the generated
-            # tokens will be token ids, it is not desirable to have the
-            # embedding layer outside of the CUDA graph all the time. The v0
-            # engine avoids this by "double compiling" the CUDA graph, once
-            # with input_ids and again with inputs_embeds, for all num_tokens.
-            # If a batch only has token ids, then including the embedding layer
-            # in the CUDA graph will be more performant (like in the else case
-            # below).
+            # 获取非输入嵌入 token 的输入嵌入,
+            # 然后放入合适的位置。
+            # TODO(qthequartermasterman): 即使启用了 prompt embeds,(a)并非所有
+            # 请求都会使用 prompt embeds,(b)初始 prompt 处理完后,其余生成的
+            # token 仍是 token ID,因此让嵌入层始终位于 CUDA 图之外并不理想。
+            # v0 引擎通过对 CUDA 图"双重编译"来避免这一点:先用 input_ids 再用
+            # inputs_embeds 编译全部 num_tokens。若批次只有 token ID,把嵌入层
+            # 纳入 CUDA 图会更有性能优势(如下面的 else 分支)。
             is_token_ids = self.is_token_ids.np[:num_scheduled_tokens]
+            # 找出需要转为嵌入的 token ID 位置。
             token_ids_idx_np = np.nonzero(is_token_ids)[0]
-            # Some tokens ids may need to become embeds
+            # 部分 token ID 可能需要转为嵌入
             if token_ids_idx_np.size > 0:
                 token_ids_idx = async_tensor_h2d(token_ids_idx_np, device=self.device)
                 token_ids = self.input_ids.gpu[token_ids_idx]
@@ -3654,14 +4315,14 @@ class GPUModelRunner(
             model_kwargs = self._init_model_kwargs()
             input_ids = None
         else:
-            # For text-only models, we use token ids as input.
-            # While it is possible to use embeddings as input just like the
-            # multimodal models, it is not desirable for performance since
-            # then the embedding layer is not included in the CUDA graph.
+            # 对纯文本模型,使用 token ID 作为输入。
+            # 虽然可以像多模态模型那样用嵌入作为输入,但出于性能考虑并不理想,
+            # 因为那样嵌入层不会包含在 CUDA 图中。
             input_ids = self.input_ids.gpu[:num_input_tokens]
             inputs_embeds = None
             model_kwargs = self._init_model_kwargs()
 
+        # 依据模型类型选择位置张量。
         if self.uses_mrope:
             positions = self.mrope_positions.gpu[:, :num_input_tokens]
         elif self.uses_xdrope_dim > 0:
@@ -3669,25 +4330,28 @@ class GPUModelRunner(
         else:
             positions = self.positions[:num_input_tokens]
             if num_input_tokens > num_scheduled_tokens:
+                # 清零填充位置的 position。
                 self.positions[num_scheduled_tokens:num_input_tokens].zero_()
 
         if is_first_rank:
+            # 第一个 rank 无需中间张量。
             intermediate_tensors = None
         else:
             assert intermediate_tensors is not None
+            # 同步并收集来自上一 rank 的中间张量。
             intermediate_tensors = self.sync_and_gather_intermediate_tensors(
                 num_input_tokens, intermediate_tensors, True
             )
 
         if is_encoder_decoder and scheduler_output.scheduled_encoder_inputs:
-            # Run the encoder, just like we do with other multimodal inputs.
-            # For an encoder-decoder model, our processing here is a bit
-            # simpler, because the outputs are just passed to the decoder.
-            # We are not doing any prompt replacement. We also will only
-            # ever have a single encoder input.
+            # 运行编码器,与其他多模态输入的处理方式类似。
+            # 对编码器-解码器模型,这里的处理更简单,因为输出直接传给解码器。
+            # 我们不做任何 prompt 替换。也只会有单个编码器输入。
             encoder_outputs = self._execute_mm_encoder(scheduler_output)
+            # 把编码器输出写入模型 kwargs。
             model_kwargs.update({"encoder_outputs": encoder_outputs})
 
+        # 返回预处理结果元组。
         return (
             input_ids,
             inputs_embeds,
@@ -3697,28 +4361,31 @@ class GPUModelRunner(
             ec_connector_output,
         )
 
+    # 执行采样并返回 SamplerOutput。
     def _sample(
         self,
         logits: torch.Tensor | None,
         spec_decode_metadata: SpecDecodeMetadata | None,
     ) -> SamplerOutput:
-        # Sample the next token and get logprobs if needed.
+        # 采样下一个 token 并按需获取 logprobs。
         sampling_metadata = self.input_batch.sampling_metadata
-        # Update output token ids with tokens sampled in last step
-        # if async scheduling and required by current sampling params.
+        # 异步调度且当前采样参数需要时,
+        # 用上一步采样的 token 更新输出 token ID。
         self.input_batch.update_async_output_token_ids()
         if spec_decode_metadata is None:
+            # 无投机解码时直接调用采样器。
             return self.sampler(
                 logits=logits,
                 sampling_metadata=sampling_metadata,
             )
 
-        # Update spec_token_ids with real draft tokens from pre step only when
-        # output_token_ids is needed (penalties or bad_words are in use).
+        # 仅在需要 output_token_ids(使用 penalties 或 bad_words)时,
+        # 用上一步的真实草稿 token 更新 spec_token_ids。
         if self.use_async_scheduling and self._draft_token_req_ids is not None:
             draft_token_ids_cpu, _ = self._get_draft_token_ids_cpu()
             self.input_batch.update_async_spec_token_ids(draft_token_ids_cpu)
 
+        # 获取草稿概率并用拒绝采样器采样。
         draft_probs = self._get_spec_decode_draft_probs(spec_decode_metadata)
         sampler_output = self.rejection_sampler(
             spec_decode_metadata,
@@ -3728,6 +4395,7 @@ class GPUModelRunner(
         )
         return sampler_output
 
+    # 同步模式下的采样后簿记(更新缓存、计算 logprobs 等)。
     def _bookkeeping_sync(
         self,
         scheduler_output: "SchedulerOutput",
@@ -3744,36 +4412,39 @@ class GPUModelRunner(
         dict[str, int],
         list[int],
     ]:
+        # 统计 logits 中的 NaN 数量(可选)。
         num_nans_in_logits = {}
         if envs.VLLM_COMPUTE_NANS_IN_LOGITS:
             num_nans_in_logits = self._get_nans_in_logits(logits)
 
+        # 持久批次请求数。
         num_reqs = self.input_batch.num_reqs
+        # 找出应丢弃采样 token 的请求索引。
         discard_sampled_tokens_req_indices = np.nonzero(
             self.discard_request_mask.np[:num_reqs]
         )[0]
         for i in discard_sampled_tokens_req_indices:
+            # 回退对应随机生成器的偏移,保证可复现性。
             gen = self.input_batch.generators.get(int(i))
             if gen is not None:
                 gen.set_offset(gen.get_offset() - 4)
 
-        # Copy some objects so they don't get modified after returning.
-        # This is important when using async scheduling.
+        # 拷贝部分对象,避免返回后被修改。
+        # 使用异步调度时这一点很重要。
         req_ids_output_copy = self.input_batch.req_ids.copy()
         req_id_to_index_output_copy = self.input_batch.req_id_to_index.copy()
 
+        # 采样的 token 数。
         num_sampled_tokens = sampler_output.sampled_token_ids.shape[0]
         sampled_token_ids = sampler_output.sampled_token_ids
         logprobs_tensors = sampler_output.logprobs_tensors
         invalid_req_indices = []
         logprobs_lists = None
         if not self.use_async_scheduling:
-            # Sync scheduling: issue routed experts D2H into the pinned
-            # CPU buffer BEFORE ``_to_list`` below. ``_to_list`` does
-            # ``event.synchronize()`` on the async copy stream which
-            # waits for every D2H queued on the default stream since
-            # the last sync, so this enqueue is naturally covered
-            # without requiring its own synchronize.
+            # 同步调度:在下方 ``_to_list`` 之前,把路由专家的 D2H 结果放入
+            # 锁页 CPU 缓冲区。``_to_list`` 会在异步拷贝流上做
+            # ``event.synchronize()``,它等待自上次同步以来在默认流上排队的所有
+            # D2H,因此这次入队自然被覆盖,无需单独同步。
             if self.routed_experts_initialized:
                 buf = self.routed_experts_capturer.get_device_buffer()
                 total = scheduler_output.total_num_scheduled_tokens
@@ -3783,19 +4454,19 @@ class GPUModelRunner(
                     non_blocking=True,
                 )
 
-            # Get the valid generated tokens.
+            # 获取有效生成的 token。
             max_gen_len = sampled_token_ids.shape[-1]
             if max_gen_len == 1:
-                # No spec decode tokens.
+                # 无投机解码 token。
                 valid_sampled_token_ids = self._to_list(sampled_token_ids)
-                # Mask out the sampled tokens that should not be sampled.
+                # 屏蔽不应被采样的 token。
                 for i in discard_sampled_tokens_req_indices:
                     valid_sampled_token_ids[int(i)].clear()
 
                 if logprobs_tensors is not None:
                     logprobs_lists = logprobs_tensors.tolists()
             else:
-                # Includes spec decode tokens.
+                # 包含投机解码 token。
                 valid_sampled_token_ids, logprobs_lists = RejectionSampler.parse_output(
                     sampled_token_ids,
                     self.input_batch.vocab_size,
@@ -3803,14 +4474,14 @@ class GPUModelRunner(
                     logprobs_tensors=logprobs_tensors,
                 )
         else:
+            # 异步调度:不在本步取回 token。
             valid_sampled_token_ids = []
             invalid_req_indices = discard_sampled_tokens_req_indices.tolist()
             invalid_req_indices_set = set(invalid_req_indices)
 
-            # Cache the sampled tokens on the GPU and avoid CPU sync.
-            # These will be copied into input_ids in the next step
-            # when preparing inputs.
-            # With spec decoding, this is done in propose_draft_token_ids().
+            # 把采样 token 缓存在 GPU 上,避免 CPU 同步。
+            # 它们会在下一步准备输入时被拷贝进 input_ids。
+            # 使用投机解码时,这一步在 propose_draft_token_ids() 中完成。
             if self.input_batch.prev_sampled_token_ids is None:
                 assert sampled_token_ids.shape[-1] == 1
                 self.input_batch.prev_sampled_token_ids = sampled_token_ids
@@ -3820,14 +4491,13 @@ class GPUModelRunner(
                 if i not in invalid_req_indices_set
             }
 
-        # Cache the sampled tokens in the model runner, so that the scheduler
-        # doesn't need to send them back.
-        # NOTE(woosuk): As an exception, when using PP, the scheduler sends
-        # the sampled tokens back, because there's no direct communication
-        # between the first-stage worker and the last-stage worker.
+        # 在模型 runner 中缓存采样 token,使调度器无需把它们回传。
+        # 注意(woosuk): 例外是使用 PP 时,调度器会把采样 token 回传,因为
+        # 第一阶段 worker 与最后阶段 worker 之间没有直接通信。
         req_ids = self.input_batch.req_ids
         for req_idx in range(num_sampled_tokens):
             if self.use_async_scheduling:
+                # 异步调度用 -1 占位。
                 sampled_ids = [-1] if req_idx not in invalid_req_indices_set else None
             else:
                 sampled_ids = valid_sampled_token_ids[req_idx]
@@ -3837,6 +4507,7 @@ class GPUModelRunner(
             if not sampled_ids:
                 continue
 
+            # 计算写入区间并断言不超过最大模型长度。
             start_idx = self.input_batch.num_tokens_no_spec[req_idx]
             end_idx = start_idx + num_sampled_ids
             assert end_idx <= self.max_model_len, (
@@ -3845,20 +4516,23 @@ class GPUModelRunner(
                 f"{self.max_model_len}"
             )
 
+            # 写入 token_ids_cpu 并更新标记与长度。
             self.input_batch.token_ids_cpu[req_idx, start_idx:end_idx] = sampled_ids
             self.input_batch.is_token_ids[req_idx, start_idx:end_idx] = True
             self.input_batch.num_tokens_no_spec[req_idx] = end_idx
 
+            # 追加到请求状态的输出 token 列表。
             req_id = req_ids[req_idx]
             req_state = self.requests[req_id]
             req_state.output_token_ids.extend(sampled_ids)
 
-        # Compute prompt logprobs if needed.
+        # 按需计算 prompt logprobs。
         prompt_logprobs_dict = self._get_prompt_logprobs_dict(
             hidden_states[:num_scheduled_tokens],
             scheduler_output.num_scheduled_tokens,
         )
 
+        # 返回簿记结果元组。
         return (
             num_nans_in_logits,
             logprobs_lists,
@@ -3869,21 +4543,23 @@ class GPUModelRunner(
             invalid_req_indices,
         )
 
+    # 上下文管理器:确保输入准备与上一步的 CPU 张量复用同步。
     @contextmanager
     def synchronize_input_prep(self):
         if self.prepare_inputs_event is None:
             yield
             return
 
-        # Ensure prior step has finished with reused CPU tensors.
-        # This is required in the async scheduling case because
-        # the CPU->GPU transfer happens async.
+        # 确保上一步已完成对复用 CPU 张量的使用。
+        # 异步调度下必须如此,因为 CPU->GPU 传输是异步的。
         self.prepare_inputs_event.synchronize()
         try:
             yield
         finally:
+            # 在结束时记录事件。
             self.prepare_inputs_event.record()
 
+    # 调用模型前向的辅助方法。
     def _model_forward(
         self,
         input_ids: torch.Tensor | None = None,
@@ -3892,22 +4568,22 @@ class GPUModelRunner(
         inputs_embeds: torch.Tensor | None = None,
         **model_kwargs: dict[str, Any],
     ) -> Any:
-        """Helper method to call the model forward pass.
+        """调用模型前向传播的辅助方法。
 
-        This method can be overridden by subclasses for model execution.
-        Motivation: We can inspect only this method versus
-        the whole execute_model, which has additional logic.
+        子类可覆盖本方法以执行模型。
+        动机:可以只检查本方法,而不必检查带有额外逻辑的整个 execute_model。
 
         Args:
-            input_ids: Input token IDs
-            positions: Token positions
-            intermediate_tensors: Tensors from previous pipeline stages
-            inputs_embeds: Input embeddings (alternative to input_ids)
-            **model_kwargs: Additional model arguments
+            input_ids: 输入 token ID
+            positions: token 位置
+            intermediate_tensors: 来自前序流水线阶段的张量
+            inputs_embeds: 输入嵌入(input_ids 的替代)
+            **model_kwargs: 额外的模型参数
 
         Returns:
-            Model output tensor
+            模型输出张量
         """
+        # 调用模型。
         return self.model(
             input_ids=input_ids,
             positions=positions,
@@ -3916,6 +4592,7 @@ class GPUModelRunner(
             **model_kwargs,
         )
 
+    # 判断是否为所有请求调度数量相同的均匀 decode 批次。
     @staticmethod
     def _is_uniform_decode(
         max_num_scheduled_tokens: int,
@@ -3925,8 +4602,7 @@ class GPUModelRunner(
         force_uniform_decode: bool | None = None,
     ) -> bool:
         """
-        Checks if it's a decode batch with same amount scheduled tokens
-        across all requests.
+        检查是否为所有请求调度 token 数相同的 decode 批次。
         """
         return (
             (
@@ -3937,6 +4613,7 @@ class GPUModelRunner(
             else force_uniform_decode
         )
 
+    # 确定批次执行方式(CUDA 图模式)与填充数量。
     def _determine_batch_execution_and_padding(
         self,
         num_tokens: int,
@@ -3946,8 +4623,8 @@ class GPUModelRunner(
         use_cascade_attn: bool,
         allow_microbatching: bool = True,
         force_eager: bool = False,
-        # For cudagraph capture TODO(lucas): Refactor how we capture cudagraphs (will
-        # be improved in model runner v2)
+        # 供 CUDA 图捕获使用 TODO(lucas): 重构 CUDA 图捕获方式
+        # (将在 model runner v2 中改进)
         force_uniform_decode: bool | None = None,
         force_has_lora: bool | None = None,
         force_num_active_loras: int | None = None,
@@ -3959,6 +4636,7 @@ class GPUModelRunner(
         torch.Tensor | None,
         CUDAGraphStat | None,
     ]:
+        # 判断是否为均匀 decode 批次。
         uniform_decode = self._is_uniform_decode(
             max_num_scheduled_tokens=max_num_scheduled_tokens,
             uniform_decode_query_len=self.uniform_decode_query_len,
@@ -3966,13 +4644,13 @@ class GPUModelRunner(
             num_reqs=num_reqs,
             force_uniform_decode=force_uniform_decode,
         )
-        # Encoder-decoder models only support CG for decoder_step > 0 (no enc_output
-        # is present). Also, chunked-prefill is disabled, so batch are uniform.
+        # 编码器-解码器模型仅支持 decoder_step > 0 时的 CUDA 图(不存在
+        # enc_output)。此外分块 prefill 被禁用,因此批次是均匀的。
         has_encoder_output = (
             self.model_config.is_encoder_decoder and num_encoder_reqs > 0
         )
 
-        # Compute LoRA state for cudagraph dispatch
+        # 为 CUDA 图分派计算 LoRA 状态。
         num_active_loras = (
             force_num_active_loras
             if force_num_active_loras is not None
@@ -3980,8 +4658,10 @@ class GPUModelRunner(
         )
         has_lora = num_active_loras > 0 if force_has_lora is None else force_has_lora
 
+        # 按序列并行要求填充 token 数。
         num_tokens_padded = self._pad_for_sequence_parallelism(num_tokens)
 
+        # 内部函数:分派 CUDA 图模式。
         def dispatch_cudagraph(num_tokens, disable_full=False, valid_modes=None):
             return self.cudagraph_dispatcher.dispatch(
                 num_tokens=num_tokens,
@@ -3992,6 +4672,7 @@ class GPUModelRunner(
                 invalid_modes={CUDAGraphMode.FULL} if disable_full else None,
             )
 
+        # 首次分派 CUDA 图模式。
         cudagraph_mode, batch_descriptor = dispatch_cudagraph(
             num_tokens_padded, disable_full=use_cascade_attn or has_encoder_output
         )
@@ -4006,8 +4687,7 @@ class GPUModelRunner(
                 "a multiple of tensor parallel size"
             )
 
-        # Extra coordination when running data-parallel since we need to coordinate
-        # across ranks
+        # 数据并行运行时的额外协调,因为需要跨秩协同。
         should_ubatch, num_tokens_across_dp = False, None
         if self.vllm_config.parallel_config.data_parallel_size > 1:
             should_ubatch, num_tokens_across_dp, synced_cudagraph_mode = (
@@ -4021,19 +4701,20 @@ class GPUModelRunner(
                 )
             )
 
-            # Extract DP-synced values
+            # 提取 DP 同步后的值。
             if num_tokens_across_dp is not None:
                 dp_rank = self.parallel_config.data_parallel_rank
                 num_tokens_padded = int(num_tokens_across_dp[dp_rank].item())
-                # Re-dispatch with DP padding so we have the correct batch_descriptor
+                # 用 DP 填充重新分派,以获得正确的 batch_descriptor。
                 cudagraph_mode, batch_descriptor = dispatch_cudagraph(
                     num_tokens_padded,
                     valid_modes={CUDAGraphMode(synced_cudagraph_mode)},
                 )
-                # Assert to make sure the agreed upon token count is correct otherwise
-                # num_tokens_across_dp will no-longer be valid
+                # 断言以确保约定的 token 数正确,否则
+                # num_tokens_across_dp 将失效。
                 assert batch_descriptor.num_tokens == num_tokens_padded
 
+        # 可选的 CUDA 图统计信息。
         cudagraph_stats = None
         if self.vllm_config.observability_config.cudagraph_metrics:
             cudagraph_stats = CUDAGraphStat(
@@ -4043,6 +4724,7 @@ class GPUModelRunner(
                 runtime_mode=str(cudagraph_mode),
             )
 
+        # 返回分派结果元组。
         return (
             cudagraph_mode,
             batch_descriptor,
@@ -4051,10 +4733,11 @@ class GPUModelRunner(
             cudagraph_stats,
         )
 
+    # 注册逐层 NVTX 钩子(若启用逐层 NVTX 追踪)。
     def _register_layerwise_nvtx_hooks(self) -> None:
         """
-        Register layerwise NVTX hooks if --enable-layerwise-nvtx-tracing is enabled
-        to trace detailed information of each layer or module in the model.
+        当启用 --enable-layerwise-nvtx-tracing 时注册逐层 NVTX 钩子,
+        以追踪模型中每一层或每个模块的详细信息。
         """
 
         if (
@@ -4068,11 +4751,10 @@ class GPUModelRunner(
                     "missing NVTX markers"
                 )
 
-            # In STOCK_TORCH_COMPILE mode, after registering hooks here,
-            # the __call__ function of nn.module will be recompiled with
-            # fullgraph=True. Since nvtx.range_push/pop are not traceable
-            # by torch dynamo, we can't register hook functions here
-            # because hook functions will also be traced by torch dynamo.
+            # 在 STOCK_TORCH_COMPILE 模式下,在这里注册钩子后,nn.Module 的
+            # __call__ 函数会以 fullgraph=True 被重新编译。由于 nvtx.range_push/pop
+            # 无法被 torch dynamo 追踪,我们不能在这里注册钩子函数,
+            # 因为钩子函数也会被 torch dynamo 追踪。
             if (
                 self.vllm_config.compilation_config.mode
                 == CompilationMode.STOCK_TORCH_COMPILE
@@ -4083,10 +4765,12 @@ class GPUModelRunner(
                     "function hooks registration"
                 )
             else:
+                # 注册 PyTorch 钩子并标记已完成。
                 pyt_hooks = PytHooks()
                 pyt_hooks.register_hooks(self.model, self.model.__class__.__name__)
                 self.layerwise_nvtx_hooks_registered = True
 
+    # 以两种格式构建槽位映射。
     def _get_slot_mappings(
         self,
         num_tokens_padded: int,
@@ -4098,19 +4782,21 @@ class GPUModelRunner(
         dict[str, torch.Tensor] | list[dict[str, torch.Tensor]] | None,
     ]:
         """
-        Build slot mappings in both formats needed by the system.
+        构建系统所需的两种格式的槽位映射。
 
         Args:
-            num_tokens_padded: Total number of tokens (padded)
-            num_reqs_padded: Total number of requests (padded)
-            num_tokens_unpadded: Actual number of tokens (unpadded)
-            ubatch_slices: Optional ubatch slicing info for DBO
+            num_tokens_padded: token 总数(已填充)
+            num_reqs_padded: 请求总数(已填充)
+            num_tokens_unpadded: 实际 token 数(未填充)
+            ubatch_slices: DBO 使用的可选微批切片信息
 
         Returns:
-            A tuple of:
-            - slot_mappings_by_gid: dict[int, torch.Tensor] for attention metadata
-            - slot_mappings_by_layer: dict[str, torch.Tensor] or list for ForwardContext
+            元组:
+            - slot_mappings_by_gid: 供注意力元数据使用的 dict[int, torch.Tensor]
+            - slot_mappings_by_layer: 供 ForwardContext 使用的 dict[str, torch.Tensor]
+              或列表
         """
+        # 无 KV cache 配置时返回空。
         if not (
             hasattr(self, "kv_cache_config")
             and self.kv_cache_config is not None
@@ -4118,32 +4804,37 @@ class GPUModelRunner(
         ):
             return None, None
 
+        # 内部函数:获取指定 KV 组的槽位映射。
         def _get_slot_mapping(kv_cache_gid: int):
             assert num_reqs_padded is not None and num_tokens_padded is not None
             kv_cache_spec = self.kv_cache_config.kv_cache_groups[
                 kv_cache_gid
             ].kv_cache_spec
             if isinstance(kv_cache_spec, EncoderOnlyAttentionSpec):
+                # 仅编码器注意力使用全零槽位映射。
                 slot_mapping = torch.zeros(
                     (num_tokens_padded,),
                     dtype=torch.int64,
                     device=self.device,
                 )
             else:
+                # 获取块表的 GPU 槽位映射。
                 blk_table = self.input_batch.block_table[kv_cache_gid]
                 slot_mapping = blk_table.slot_mapping.gpu[:num_tokens_padded]
 
-            # Fill unused with -1. Needed for reshape_and_cache in full cuda
-            # graph mode. `blk_table_tensor` -1 to match mamba PAD_SLOT_ID
+            # 用 -1 填充未使用部分。完整 CUDA 图模式下的 reshape_and_cache 需要它。
+            # `blk_table_tensor` 取 -1 以匹配 mamba 的 PAD_SLOT_ID
             slot_mapping[num_tokens_unpadded:num_tokens_padded].fill_(-1)
 
             return slot_mapping
 
+        # 为每个 KV 组构建槽位映射。
         slot_mappings_by_gid = {
             gid: _get_slot_mapping(gid)
             for gid, _ in enumerate(self.kv_cache_config.kv_cache_groups)
         }
 
+        # 把组级映射展开为层级映射。
         slot_mappings_by_layer: dict[str, torch.Tensor] = {}
         for gid, kv_cache_group in enumerate(self.kv_cache_config.kv_cache_groups):
             slot_mapping = slot_mappings_by_gid[gid]
@@ -4151,6 +4842,7 @@ class GPUModelRunner(
                 slot_mappings_by_layer[layer_name] = slot_mapping
 
         if ubatch_slices is not None:
+            # 微批切片时按 token 区间切片。
             result: list[dict[str, torch.Tensor]] = []
             for ubatch in ubatch_slices:
                 sliced_mappings: dict[str, torch.Tensor] = {}
@@ -4159,14 +4851,15 @@ class GPUModelRunner(
                 result.append(sliced_mappings)
             return slot_mappings_by_gid, result
 
+        # 返回组级与层级两种映射。
         return slot_mappings_by_gid, slot_mappings_by_layer
 
+    # 检查是否所有已调度请求都被标记为丢弃采样 token。
     def _is_all_reqs_chunked_prefill(self) -> bool:
-        """Check if all scheduled requests are marked to discard sampled tokens.
+        """检查是否所有已调度请求都被标记为丢弃采样 token。
 
-        This is true when `discard_request_mask` is set for every scheduled
-        request (e.g., for chunked prefill requests that are not the last
-        prefill chunk)."""
+        当每个已调度请求的 `discard_request_mask` 都被置位时返回 True
+        (例如,非最后一个 prefill 块的分块 prefill 请求)。"""
         num_reqs = self.input_batch.num_reqs
         return bool(self.discard_request_mask.np[:num_reqs].all())
 
